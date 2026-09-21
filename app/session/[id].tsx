@@ -12,6 +12,7 @@ import {
   Platform,
   ActivityIndicator,
   Alert,
+  useWindowDimensions,
 } from "react-native"
 import { useLocalSearchParams, Stack, useRouter, useFocusEffect } from "expo-router"
 import { Ionicons } from "@expo/vector-icons"
@@ -41,6 +42,7 @@ import { useAuth } from "../../src/stores/auth"
 import { useCatalog } from "../../src/stores/catalog"
 import { useSpeech } from "../../src/lib/speech"
 import { keyboardPadding, keyboardVerticalOffset } from "../../src/lib/keyboard-offset"
+import { composerMaxHeight } from "../../src/lib/session-layout"
 
 // --- Builtin slash commands ---
 const BUILTIN_COMMANDS: SlashCommand[] = [
@@ -79,6 +81,7 @@ export default function SessionScreen() {
   const colorScheme = useColorScheme()
   const isDark = colorScheme === "dark"
   const insets = useSafeAreaInsets()
+  const { height: windowHeight, fontScale } = useWindowDimensions()
   const { t } = useTranslation()
 
   const flatListRef = useRef<FlatList>(null)
@@ -87,20 +90,23 @@ export default function SessionScreen() {
   const [input, setInput] = useState("")
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [showInfo, setShowInfo] = useState(false)
-  const [keyboardHeight, setKeyboardHeight] = useState(() => Keyboard.metrics()?.height ?? 0)
+  const [keyboard, setKeyboard] = useState(() => Keyboard.metrics() ?? null)
+  const keyboardHeight = keyboard?.height ?? 0
 
   useEffect(() => {
     if (Platform.OS !== "android") return
-    const show = Keyboard.addListener("keyboardDidShow", (event) => setKeyboardHeight(event.endCoordinates.height))
-    const hide = Keyboard.addListener("keyboardDidHide", () => setKeyboardHeight(0))
+    const show = Keyboard.addListener("keyboardDidShow", (event) => setKeyboard(event.endCoordinates))
+    const hide = Keyboard.addListener("keyboardDidHide", () => setKeyboard(null))
     // Close the render-to-effect race: listeners are attached first, then the
     // current native metrics become the source of truth.
-    setKeyboardHeight(Keyboard.metrics()?.height ?? 0)
+    setKeyboard(Keyboard.metrics() ?? null)
     return () => {
       show.remove()
       hide.remove()
     }
   }, [])
+
+  const inputMaxHeight = composerMaxHeight(Platform.OS, windowHeight, keyboard?.screenY ?? null, insets.top, fontScale)
 
   const {
     currentSession,
@@ -816,7 +822,7 @@ export default function SessionScreen() {
             </TouchableOpacity>
 
             <TextInput
-              style={[s.input, isDark && s.inputDark, speech.listening && s.inputListening]}
+              style={[s.input, isDark && s.inputDark, speech.listening && s.inputListening, { maxHeight: inputMaxHeight }]}
               placeholder={
                 speech.listening
                   ? t("session.input.placeholderListening")
@@ -829,6 +835,7 @@ export default function SessionScreen() {
               onChangeText={speech.listening ? undefined : setInput}
               editable={!speech.listening}
               multiline
+              scrollEnabled
               maxLength={10000}
               testID="chat-message-input"
             />
