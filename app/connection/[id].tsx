@@ -20,6 +20,7 @@ import { probeConnection, shareReport } from "../../src/lib/diagnostics"
 import { captureDiagnostic } from "../../src/lib/sentry"
 import { parseUrl } from "../../src/lib/diagnostics-classify"
 import { buildAuth } from "../../src/lib/auth"
+import { useKeyboardHeight } from "../../src/lib/use-keyboard-height"
 
 // labelKey (not literal text): this is a module-level constant evaluated
 // before i18next is guaranteed ready, so the label is resolved with t() at
@@ -41,6 +42,7 @@ export default function EditConnectionScreen() {
   const { t } = useTranslation()
 
   const { connections, updateConnection, removeConnection, testConnection } = useConnections()
+  const keyboardHeight = useKeyboardHeight()
 
   const connection = connections.find((c) => c.id === id)
 
@@ -181,8 +183,9 @@ export default function EditConnectionScreen() {
   }
 
   return (
+    <View style={[styles.container, isDark && styles.containerDark, { paddingBottom: keyboardHeight }]}>
     <ScrollView
-      style={[styles.container, isDark && styles.containerDark]}
+      style={styles.scroll}
       contentContainerStyle={styles.content}
       keyboardShouldPersistTaps="handled"
     >
@@ -316,6 +319,7 @@ export default function EditConnectionScreen() {
         </TouchableOpacity>
       </View>
     </ScrollView>
+    </View>
   )
 }
 
@@ -326,6 +330,9 @@ const styles = StyleSheet.create({
   },
   containerDark: {
     backgroundColor: "#0a0a0a",
+  },
+  scroll: {
+    flex: 1,
   },
   center: {
     justifyContent: "center",

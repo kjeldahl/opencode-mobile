@@ -19,6 +19,7 @@ import { probeConnection, shareReport } from "../../src/lib/diagnostics"
 import { captureDiagnostic } from "../../src/lib/sentry"
 import { parseUrl } from "../../src/lib/diagnostics-classify"
 import { buildAuth } from "../../src/lib/auth"
+import { useKeyboardHeight } from "../../src/lib/use-keyboard-height"
 import { AnalyticsEvent, track } from "../../src/lib/analytics"
 export default function AddConnectionScreen() {
   const colorScheme = useColorScheme()
@@ -26,6 +27,7 @@ export default function AddConnectionScreen() {
   const { t } = useTranslation()
 
   const { addConnection, testConnection } = useConnections()
+  const keyboardHeight = useKeyboardHeight()
 
   const [mode, setMode] = useState<"quick" | "advanced">("quick")
   const [type, setType] = useState<ConnectionType>("local")
@@ -208,8 +210,9 @@ export default function AddConnectionScreen() {
   // Quick connect mode - simplified
   if (mode === "quick") {
     return (
+      <View style={[styles.container, isDark && styles.containerDark, { paddingBottom: keyboardHeight }]}>
       <ScrollView
-        style={[styles.container, isDark && styles.containerDark]}
+        style={styles.scroll}
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
       >
@@ -332,13 +335,15 @@ export default function AddConnectionScreen() {
           <Ionicons name="chevron-forward" size={16} color={isDark ? "#888888" : "#666666"} />
         </TouchableOpacity>
       </ScrollView>
+      </View>
     )
   }
 
   // Advanced mode - full options
   return (
+    <View style={[styles.container, isDark && styles.containerDark, { paddingBottom: keyboardHeight }]}>
     <ScrollView
-      style={[styles.container, isDark && styles.containerDark]}
+      style={styles.scroll}
       contentContainerStyle={styles.content}
       keyboardShouldPersistTaps="handled"
     >
@@ -474,6 +479,7 @@ export default function AddConnectionScreen() {
         )}
       </TouchableOpacity>
     </ScrollView>
+    </View>
   )
 }
 
@@ -484,6 +490,9 @@ const styles = StyleSheet.create({
   },
   containerDark: {
     backgroundColor: "#0a0a0a",
+  },
+  scroll: {
+    flex: 1,
   },
   content: {
     padding: 16,
