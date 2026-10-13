@@ -3,69 +3,70 @@ import { View, Text, FlatList, TouchableOpacity, StyleSheet, useColorScheme, Ref
 import { Stack, router, useLocalSearchParams } from "expo-router"
 import { Ionicons } from "@expo/vector-icons"
 import { useTranslation } from "react-i18next"
-import { useChanges, useOnTurnEnd, turnKey, vcsKey } from "../../src/stores/changes"
-import { useConnections } from "../../src/stores/connections"
+import { useChanges, useOnTurnEnd, infoKey, turnKey, vcsKey } from "../../src/stores/changes"
 import { useSessions } from "../../src/stores/sessions"
-import { lastUserMessageID, sortDiffs, splitPath, totals, type ChangeTab } from "../../src/lib/changes"
-import type { FileDiff, VcsInfo } from "../../src/lib/sdk"
+import { branchOffered, lastUserMessageID, sortDiffs, splitPath, totals, type ChangeTab } from "../../src/lib/changes"
+import type { FileDiff } from "../../src/lib/sdk"
 
 const TABS: ChangeTab[] = ["branch", "git", "turn"]
 
 export default function ChangesScreen() {
-  const { id, directory, tab: initial } = useLocalSearchParams<{ id: string; directory?: string; tab?: ChangeTab }>()
+  const params = useLocalSearchParams<{ id: string; directory?: string; tab?: ChangeTab }>()
+  const id = params.id
   const isDark = useColorScheme() === "dark"
   const { t } = useTranslation()
-  const [tab, setTab] = useState<ChangeTab>(initial && TABS.includes(initial) ? initial : "branch")
-  const [info, setInfo] = useState<VcsInfo | null>(null)
 
+  // The chat's own folder. Never fall back to no directory: the server would
+  // answer for its default folder, i.e. silently the wrong repo.
+  const directory = useSessions((s) => (s.currentSession?.id === id ? s.currentSession.directory : undefined)) || params.directory || undefined
   const messageID = useSessions((s) => (s.currentSession?.id === id ? lastUserMessageID(s.messages) : undefined))
-  const { loadVcs, loadTurn } = useChanges()
+  const info = useChanges((s) => (directory ? s.info[infoKey(directory)] : undefined))
+  const { loadInfo, loadVcs, loadTurn } = useChanges()
+
+  // Branch is offered only off the default branch (same rule as the web app).
+  const tabs = branchOffered(info) ? TABS : TABS.filter((item) => item !== "branch")
+  const [picked, setPicked] = useState<ChangeTab | undefined>(params.tab)
+  const tab = picked && tabs.includes(picked) ? picked : tabs[0]
+
   const key = tab === "turn" ? turnKey(id) : directory ? vcsKey(directory, tab) : ""
   const entry = useChanges((s) => s.entries[key])
 
   const load = useCallback(
     (which: ChangeTab, force?: boolean) => {
-      if (which === "turn") return loadTurn(id, directory, messageID, force)
       if (!directory) return Promise.resolve()
+      if (which === "turn") return loadTurn(id, directory, messageID, force)
       return loadVcs(directory, which, force)
     },
     [id, directory, messageID, loadTurn, loadVcs],
   )
 
   useEffect(() => {
+    if (directory) void loadInfo(directory)
+  }, [directory, loadInfo])
+
+  useEffect(() => {
     void load(tab)
   }, [tab, load])
 
-  useEffect(() => {
-    if (!directory) return
-    const client = useConnections.getState().clientForDirectory(directory)
-    client?.vcs
-      .get()
-      .then(setInfo)
-      .catch(() => setInfo(null))
-  }, [directory])
-
   useOnTurnEnd(id, () => {
-    for (const which of TABS) void load(which, true)
+    if (directory) void loadInfo(directory)
+    for (const which of tabs) void load(which, true)
   })
 
   const diffs = useMemo(() => sortDiffs(entry?.diffs ?? []), [entry?.diffs])
   const sum = totals(diffs)
-  const onDefault = !!info?.branch && info.branch === info.default_branch
-
-  const emptyText =
-    tab === "branch" ? (onDefault ? t("changes.empty.defaultBranch") : t("changes.empty.branch")) : t(`changes.empty.${tab}`)
+  const emptyText = t(`changes.empty.${tab}`)
 
   return (
     <View style={[s.container, isDark && s.containerDark]}>
       <Stack.Screen options={{ title: t("changes.title") }} />
 
       <View style={[s.tabs, isDark && s.tabsDark]}>
-        {TABS.map((item) => (
+        {tabs.map((item) => (
           <TouchableOpacity
             key={item}
             style={[s.tab, tab === item && s.tabActive]}
-            onPress={() => setTab(item)}
+            onPress={() => setPicked(item)}
             testID={`changes-tab-${item}`}
           >
             <Text style={[s.tabText, isDark && s.textDark, tab === item && s.tabTextActive]}>{t(`changes.tabs.${item}`)}</Text>
@@ -77,7 +78,9 @@ export default function ChangesScreen() {
         <Text style={[s.summaryText, isDark && s.metaDark]} numberOfLines={1}>
           {tab === "branch" && info?.branch && info.default_branch
             ? `${t("changes.branchVs", { branch: info.branch, base: info.default_branch })} · `
-            : ""}
+            : tab === "git" && info?.branch
+              ? `${info.branch} · `
+              : ""}
           {t("changes.summary", { count: sum.files })}
         </Text>
         <Text style={s.add}>+{sum.additions}</Text>
@@ -102,7 +105,9 @@ export default function ChangesScreen() {
           />
         )}
         ListEmptyComponent={
-          entry?.loading || !entry ? (
+          !directory ? (
+            <Text style={[s.empty, isDark && s.metaDark]}>{t("changes.noDirectory")}</Text>
+          ) : entry?.loading || !entry ? (
             <ActivityIndicator style={s.loading} color={isDark ? "#ffffff" : "#0a0a0a"} />
           ) : entry.error ? null : (
             <Text style={[s.empty, isDark && s.metaDark]}>{emptyText}</Text>

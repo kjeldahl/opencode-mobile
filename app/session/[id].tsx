@@ -178,7 +178,7 @@ export default function SessionScreen() {
 
   // Branch/uncommitted change counts for this chat's repo; refreshed on focus
   // and whenever the agent finishes a turn.
-  const changesDir = currentSession?.directory || directory
+  const changesDir = (currentSession?.id === id ? currentSession.directory : undefined) || directory
   const changes = useHeadline(changesDir)
   const refreshChanges = useCallback(
     (force?: boolean) => {

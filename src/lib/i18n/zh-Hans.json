@@ -420,7 +420,6 @@
     "summary": "{{count}} 个文件",
     "empty": {
       "branch": "此分支没有更改。",
-      "defaultBranch": "当前在默认分支：请查看“未提交”。",
       "git": "没有未提交的更改。",
       "turn": "上一轮没有更改。"
     },
@@ -430,7 +429,8 @@
       "added": "新增",
       "deleted": "删除",
       "modified": "修改"
-    }
+    },
+    "noDirectory": "此会话没有文件夹，无法显示更改。"
   },
   "connect": {
     "title": "打开工作区",

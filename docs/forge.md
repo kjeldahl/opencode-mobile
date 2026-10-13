@@ -21,6 +21,8 @@ intent://connect?url=...&name=...&user=...&dir=...#Intent;scheme=opencode;packag
 ## Changes view
 
 Per chat: Branch (`/vcs/diff?mode=branch`), Uncommitted (`/vcs/diff?mode=git`),
-This turn (`/session/<id>/diff?messageID=<last user msg>`). Session list and chat
-header counts come from the branch diff (uncommitted on the default branch), not
-from `session.summary`.
+This turn (`/session/<id>/diff?messageID=<last user msg>`). Every request carries the
+chat's own `directory` (`session.directory`); without it the server answers for its
+default folder. Branch is offered only when `/vcs` reports `branch != default_branch`.
+Session list and chat header counts: branch diff when offered, else uncommitted;
+never `session.summary`.

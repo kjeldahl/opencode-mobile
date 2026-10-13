@@ -420,7 +420,6 @@
     "summary": "{{count}} files",
     "empty": {
       "branch": "No changes on this branch.",
-      "defaultBranch": "On the default branch: see Uncommitted.",
       "git": "No uncommitted changes.",
       "turn": "No changes in the last turn."
     },
@@ -430,7 +429,8 @@
       "added": "added",
       "deleted": "deleted",
       "modified": "modified"
-    }
+    },
+    "noDirectory": "This chat has no folder, so there are no changes to show."
   },
   "connect": {
     "title": "Open workspace",

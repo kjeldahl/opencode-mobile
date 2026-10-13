@@ -361,9 +361,14 @@ export function createClient(config: ClientConfig) {
       },
     },
 
-    // Version control state of this client's directory.
+    // Version control state of this client's directory. The directory also
+    // goes in the query: a request without one is answered (200) for the
+    // server's default folder, i.e. silently the wrong repo.
     vcs: {
-      get: () => request<VcsInfo>(config, "/vcs"),
+      get: () => {
+        const query = config.directory ? `?${new URLSearchParams({ directory: config.directory }).toString()}` : ""
+        return request<VcsInfo>(config, `/vcs${query}`)
+      },
       diff: (mode: VcsMode) => {
         const query = new URLSearchParams({ mode })
         if (config.directory) query.set("directory", config.directory)
@@ -483,8 +488,11 @@ export function createClient(config: ClientConfig) {
       abort: (sessionID: string) => request<boolean>(config, `/session/${sessionID}/abort`, { method: "POST" }),
 
       diff: (sessionID: string, messageID?: string) => {
-        const qs = messageID ? `?messageID=${encodeURIComponent(messageID)}` : ""
-        return request<FileDiff[]>(config, `/session/${sessionID}/diff${qs}`)
+        const query = new URLSearchParams()
+        if (messageID) query.set("messageID", messageID)
+        if (config.directory) query.set("directory", config.directory)
+        const qs = query.toString()
+        return request<FileDiff[]>(config, `/session/${sessionID}/diff${qs ? `?${qs}` : ""}`)
       },
 
       // Marks messageID (and everything after it) as pending revert. The

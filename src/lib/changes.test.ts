@@ -1,6 +1,6 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
-import { headline, lastUserMessageID, parsePatch, sortDiffs, splitPath, totals } from "./changes.ts"
+import { branchOffered, headline, lastUserMessageID, parsePatch, sortDiffs, splitPath, totals } from "./changes.ts"
 
 const diff = (file: string, additions: number, deletions: number) => ({ file, additions, deletions })
 
@@ -9,10 +9,19 @@ test("totals sums files and line counts", () => {
   assert.deepEqual(totals(undefined), { files: 0, additions: 0, deletions: 0 })
 })
 
-test("headline prefers branch changes, falls back to uncommitted", () => {
-  assert.deepEqual(headline([diff("a", 1, 1)], [diff("b", 9, 9), diff("c", 1, 0)]), { files: 1, additions: 1, deletions: 1 })
-  assert.deepEqual(headline([], [diff("b", 9, 9)]), { files: 1, additions: 9, deletions: 9 })
-  assert.deepEqual(headline(undefined, undefined), { files: 0, additions: 0, deletions: 0 })
+test("branch is offered only off the default branch", () => {
+  assert.equal(branchOffered({ branch: "feat", default_branch: "main" }), true)
+  assert.equal(branchOffered({ branch: "main", default_branch: "main" }), false)
+  assert.equal(branchOffered({ branch: "feat" }), false)
+  assert.equal(branchOffered(null), false)
+})
+
+test("headline counts the branch off the default branch, else uncommitted", () => {
+  const branch = [diff("a", 1, 1)]
+  const git = [diff("b", 9, 9), diff("c", 1, 0)]
+  assert.deepEqual(headline({ branch: "feat", default_branch: "main" }, branch, git), { files: 1, additions: 1, deletions: 1 })
+  assert.deepEqual(headline({ branch: "main", default_branch: "main" }, branch, git), { files: 2, additions: 10, deletions: 9 })
+  assert.deepEqual(headline(undefined, undefined, undefined), { files: 0, additions: 0, deletions: 0 })
 })
 
 test("sortDiffs orders by path without mutating", () => {

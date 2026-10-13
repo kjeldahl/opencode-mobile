@@ -2,7 +2,7 @@
 // cover them). Patch parsing follows chliny's patch-compute from upstream
 // PR #192 (MIT).
 import type { DiffLine } from "../components/chat/diff-compute"
-import type { FileDiff } from "./sdk"
+import type { FileDiff, VcsInfo } from "./sdk"
 
 export type ChangeTab = "branch" | "git" | "turn"
 
@@ -21,11 +21,16 @@ export function totals(diffs: FileDiff[] | undefined): ChangeTotals {
   }
 }
 
-// Counts for the session list and chat header: everything on the branch, or,
-// on the default branch (where branch mode is empty), the uncommitted edits.
-export function headline(branch: FileDiff[] | undefined, git: FileDiff[] | undefined): ChangeTotals {
-  if (branch && branch.length > 0) return totals(branch)
-  return totals(git)
+// "Branch" (vs the default branch) only means something off the default
+// branch; on it the branch diff is empty. Same rule as the web app.
+export function branchOffered(info: VcsInfo | null | undefined): boolean {
+  return !!info?.branch && !!info.default_branch && info.branch !== info.default_branch
+}
+
+// Counts for the session list and chat header: everything on the branch, or
+// the uncommitted edits when there is no branch to compare.
+export function headline(info: VcsInfo | null | undefined, branch: FileDiff[] | undefined, git: FileDiff[] | undefined): ChangeTotals {
+  return branchOffered(info) ? totals(branch) : totals(git)
 }
 
 export function sortDiffs(diffs: FileDiff[]): FileDiff[] {
