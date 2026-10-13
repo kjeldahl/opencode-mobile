@@ -1,5 +1,7 @@
 # OpenCode Mobile
 
+> **About this fork** — This repository is a **personal, own-server build** of [dzianisv/opencode-mobile](https://github.com/dzianisv/opencode-mobile). It exists so I can run and ship the mobile client against **my own self-hosted opencode server** and keep my config/changes separate from the community upstream. All credit for the client itself goes to the upstream project; this fork just tracks and carries my personal setup.
+
 **The open-source Android client for the [opencode](https://github.com/sst/opencode) AI coding agent.**
 AI-assisted coding from your phone — Android, via Google Play, F-Droid, or a direct APK.
 
