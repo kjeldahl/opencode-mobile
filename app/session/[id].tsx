@@ -32,6 +32,7 @@ import {
   VariantPicker,
   ImageAttachments,
   SessionInfo,
+  PrButton,
   type SlashCommand,
   type Attachment,
 } from "../../src/components/chat"
@@ -181,6 +182,19 @@ export default function SessionScreen() {
   )
   useFocusEffect(useCallback(() => refreshChanges(), [refreshChanges]))
   useOnTurnEnd(id, () => refreshChanges(true))
+  const sessionBusy = useEvents((state) => {
+    const type = sessionID ? state.sessionStatus[sessionID]?.type : undefined
+    return type === "busy" || type === "retry"
+  })
+  const sendPr = useCallback(
+    (text: string) => {
+      sendMessage(text, model || undefined, agent || undefined, [], variant || undefined).catch((err) => {
+        console.error("PR action failed:", err)
+        Alert.alert(t("session.alerts.sendFailedTitle"), t("session.alerts.sendFailedMessage"))
+      })
+    },
+    [sendMessage, model, agent, variant, t],
+  )
   const openChanges = useCallback(() => {
     if (!id) return
     router.push({ pathname: "/changes/[id]", params: { id, directory: changesDir ?? "" } })
@@ -850,6 +864,15 @@ export default function SessionScreen() {
               </Text>
             </TouchableOpacity>
           )}
+
+          <PrButton
+            directory={changesDir}
+            messages={messages || []}
+            parts={parts}
+            busy={isSending || sessionBusy}
+            isDark={isDark}
+            onSend={sendPr}
+          />
         </View>
 
         {/* Attachment preview */}
@@ -1017,6 +1040,7 @@ const s = StyleSheet.create({
   modelChip: {
     flexDirection: "row",
     alignItems: "center",
+    flexShrink: 1,
     gap: 4,
     backgroundColor: "#f5f5f5",
     borderRadius: 12,

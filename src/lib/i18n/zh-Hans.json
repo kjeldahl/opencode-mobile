@@ -392,6 +392,33 @@
         "hoursAgo": "{{count}} 小时前",
         "daysAgo": "{{count}} 天前"
       }
+    },
+    "prButton": {
+      "labels": {
+        "create": "创建 PR",
+        "creating": "正在创建 PR…",
+        "checking": "正在检查…",
+        "watching": "正在监视…",
+        "merging": "正在合并…",
+        "merged": "已合并",
+        "closed": "已关闭",
+        "pending": "检查进行中",
+        "passing": "检查已通过",
+        "failing": "检查失败",
+        "none": "无检查",
+        "unknown": "已打开"
+      },
+      "menu": {
+        "openGithub": "在 GitHub 上打开",
+        "refresh": "刷新状态",
+        "watch": "监视并修复检查",
+        "merge": "合并 PR"
+      },
+      "mergeConfirm": {
+        "title": "合并拉取请求？",
+        "message": "让代理合并 PR #{{number}}。",
+        "confirm": "合并"
+      }
     }
   },
   "demo": {

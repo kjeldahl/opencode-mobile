@@ -392,6 +392,33 @@
         "hoursAgo": "{{count}}h ago",
         "daysAgo": "{{count}}d ago"
       }
+    },
+    "prButton": {
+      "labels": {
+        "create": "Create PR",
+        "creating": "Creating PR…",
+        "checking": "Checking…",
+        "watching": "Watching…",
+        "merging": "Merging…",
+        "merged": "Merged",
+        "closed": "Closed",
+        "pending": "Checks running",
+        "passing": "Checks passed",
+        "failing": "Checks failed",
+        "none": "No checks",
+        "unknown": "Open"
+      },
+      "menu": {
+        "openGithub": "Open on GitHub",
+        "refresh": "Refresh status",
+        "watch": "Watch & fix checks",
+        "merge": "Merge PR"
+      },
+      "mergeConfirm": {
+        "title": "Merge pull request?",
+        "message": "Ask the agent to merge PR #{{number}}.",
+        "confirm": "Merge"
+      }
     }
   },
   "demo": {

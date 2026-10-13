@@ -5,6 +5,7 @@ import { Markdown } from "../markdown"
 import { ToolCallCard } from "./ToolCallCard"
 import { ReasoningBlock } from "./ReasoningBlock"
 import type { Message, Part } from "../../lib/sdk"
+import { stripMarkers } from "../../lib/pr"
 
 const SCREEN_WIDTH = Dimensions.get("window").width
 
@@ -32,7 +33,9 @@ export const MessageBubble = memo(
     const reasoningParts = parts.filter((p) => p.type === "reasoning")
     const toolParts = parts.filter((p) => p.type === "tool")
     const fileParts = parts.filter((p) => p.type === "file" && isImageMime(p.mime))
-    const text = textParts.map((p) => p.text).join("\n") || ""
+    const joined = textParts.map((p) => p.text).join("\n") || ""
+    // PR status lines are read by the PR button, not shown.
+    const text = isUser ? joined : stripMarkers(joined)
     const reasoning = reasoningParts.map((p) => p.text).join("\n") || ""
 
     return (
