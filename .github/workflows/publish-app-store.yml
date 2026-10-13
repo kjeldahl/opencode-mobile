@@ -53,6 +53,8 @@ permissions:
 jobs:
   testflight:
     name: EAS Build and submit to TestFlight
+    # Upstream-only: needs upstream secrets/accounts; skip on forks.
+    if: github.repository == 'dzianisv/opencode-mobile'
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:

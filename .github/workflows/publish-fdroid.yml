@@ -7,6 +7,8 @@ on:
 
 jobs:
   publish-fdroid:
+    # Upstream-only: needs upstream secrets/accounts; skip on forks.
+    if: github.repository == 'dzianisv/opencode-mobile'
     runs-on: ubuntu-latest
     permissions:
       contents: write

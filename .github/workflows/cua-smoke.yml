@@ -46,6 +46,8 @@ on:
 
 jobs:
   cua-test:
+    # Upstream-only: needs upstream secrets/accounts; skip on forks.
+    if: github.repository == 'dzianisv/opencode-mobile'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
