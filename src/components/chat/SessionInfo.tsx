@@ -4,6 +4,7 @@ import { Ionicons } from "@expo/vector-icons"
 import { useTranslation } from "react-i18next"
 import type { Message, Session } from "../../lib/sdk"
 import type { Provider } from "../../stores/catalog"
+import type { ChangeTotals } from "../../lib/changes"
 
 interface Props {
   session: Session | null
@@ -16,6 +17,10 @@ interface Props {
   onLoadAll: () => void
   onScrollToTop: () => void
   onClose: () => void
+  // Branch/uncommitted totals from the vcs diff (session.summary is empty
+  // since opencode 1.15).
+  changes?: ChangeTotals | null
+  onChangesPress?: () => void
 }
 
 function compact(n: number): string {
@@ -51,6 +56,8 @@ export function SessionInfo({
   onLoadAll,
   onScrollToTop,
   onClose,
+  changes,
+  onChangesPress,
 }: Props) {
   const { t } = useTranslation()
   // Match TUI: last assistant message tokens (context window), cumulative cost
@@ -89,7 +96,6 @@ export function SessionInfo({
 
   const hasTokens = stats.total > 0
   const hasCost = stats.cost > 0
-  const summary = session?.summary
   const created = session?.time.created
   const updated = session?.time.updated
 
@@ -164,13 +170,15 @@ export function SessionInfo({
           value={String(messages.length) + (hasMore ? "+" : "")}
           isDark={isDark}
         />
-        {summary && summary.files > 0 && (
-          <MetaItem
-            icon="code-outline"
-            label={t("chat.sessionInfo.meta.changes")}
-            value={`${summary.files}f +${summary.additions} -${summary.deletions}`}
-            isDark={isDark}
-          />
+        {changes && changes.files > 0 && (
+          <TouchableOpacity onPress={onChangesPress} disabled={!onChangesPress} testID="session-info-changes">
+            <MetaItem
+              icon="code-outline"
+              label={t("chat.sessionInfo.meta.changes")}
+              value={`${changes.files}f +${changes.additions} -${changes.deletions}`}
+              isDark={isDark}
+            />
+          </TouchableOpacity>
         )}
         {session?.share?.url && (
           <MetaItem icon="share-outline" label={t("chat.sessionInfo.meta.shared")} value={t("chat.sessionInfo.meta.yes")} isDark={isDark} />

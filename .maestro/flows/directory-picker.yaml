@@ -1,4 +1,4 @@
-appId: cc.agentlabs.opencode
+appId: it.kjeldahl.opencode
 name: Directory picker - browse server folders and create a session in one
 ---
 # New-feature regression coverage for DirectoryBrowserSheet
@@ -19,11 +19,6 @@ name: Directory picker - browse server folders and create a session in one
 
 - launchApp:
     clearState: true
-- assertVisible:
-    id: "telemetry-consent-card"
-- tapOn:
-    id: "telemetry-decline-button"
-
 - assertVisible:
     text: "No Connection"
 - tapOn:

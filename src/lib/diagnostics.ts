@@ -4,12 +4,9 @@
 import { Platform, Share } from "react-native"
 import * as Clipboard from "expo-clipboard"
 import * as Device from "expo-device"
-import * as SecureStore from "expo-secure-store"
 import appJson from "../../app.json"
 import { log, formatLogLines } from "./logbuffer"
 import { type Classification, type ProbeAttempt, type ParsedUrl, parseUrl, classify } from "./diagnostics-classify"
-import { chatwootConfigured, sendSupportReport } from "./chatwoot"
-import { hasTelemetryConsent, loadTelemetryConsent } from "./telemetry"
 import { redactHostAndUrls } from "./scrub"
 
 export type { Classification, ProbeAttempt } from "./diagnostics-classify"
@@ -90,6 +87,7 @@ export async function probeConnection(url: string, auth?: { username: string; pa
       timedFetch("server-root", `${base}/`, { headers }, { requireOk: false }),
       timedFetch("internet", INTERNET_CHECK_URL),
     ])
+    health.authProvided = Boolean(auth?.password)
   } else {
     const skipped: ProbeAttempt = { name: "health", target: url, ok: false, durationMs: 0, error: "skipped: malformed url" }
     health = skipped
@@ -185,34 +183,10 @@ export function formatReportForSupport(report: DiagnosticReport): string {
   return redactHostAndUrls(formatReport(report), [report.host, ...seenHosts])
 }
 
-const CHATWOOT_SOURCE_KEY = "opencode_chatwoot_source_id"
-
-// Best-effort delivery of the scrubbed report to the Chatwoot support inbox.
-// Only runs when the user has granted telemetry consent (same flag that
-// gates Sentry/analytics) and the inbox is configured for this build.
-async function sendReportToSupport(report: DiagnosticReport): Promise<void> {
-  // Consent may not be loaded yet if a crash happens very early in startup —
-  // resolve it from the store rather than silently dropping the report.
-  if (hasTelemetryConsent() === null) await loadTelemetryConsent()
-  if (hasTelemetryConsent() !== true || !chatwootConfigured()) return
-  try {
-    await sendSupportReport(formatReportForSupport(report), {
-      loadSourceId: () => SecureStore.getItemAsync(CHATWOOT_SOURCE_KEY),
-      saveSourceId: (id) => SecureStore.setItemAsync(CHATWOOT_SOURCE_KEY, id),
-    })
-    log.info("diag", "report delivered to support inbox")
-  } catch (e) {
-    log.warn("diag", "support delivery failed", String(e))
-  }
-}
-
 // Copy the report to the clipboard and open the native share sheet.
-// Works fully offline (unlike the Sentry auto-upload). When telemetry
-// consent is granted, a scrubbed copy is also delivered to the support
-// inbox so reports reach us even if the user cancels the share sheet.
+// Works fully offline; nothing is sent anywhere unless the user shares it.
 export async function shareReport(report: DiagnosticReport): Promise<void> {
   const text = formatReport(report)
-  void sendReportToSupport(report)
   try {
     await Clipboard.setStringAsync(text)
   } catch {

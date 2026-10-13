@@ -8,9 +8,11 @@ import {
   StyleSheet,
   useColorScheme,
   KeyboardAvoidingView,
+  Keyboard,
   Platform,
   ActivityIndicator,
   Alert,
+  useWindowDimensions,
 } from "react-native"
 import { useLocalSearchParams, Stack, useRouter, useFocusEffect } from "expo-router"
 import { Ionicons } from "@expo/vector-icons"
@@ -39,6 +41,9 @@ import { useConnections } from "../../src/stores/connections"
 import { useAuth } from "../../src/stores/auth"
 import { useCatalog } from "../../src/stores/catalog"
 import { useSpeech } from "../../src/lib/speech"
+import { keyboardPadding, keyboardVerticalOffset } from "../../src/lib/keyboard-offset"
+import { composerMaxHeight } from "../../src/lib/session-layout"
+import { useChanges, useHeadline, useOnTurnEnd } from "../../src/stores/changes"
 
 // --- Builtin slash commands ---
 const BUILTIN_COMMANDS: SlashCommand[] = [
@@ -77,14 +82,34 @@ export default function SessionScreen() {
   const colorScheme = useColorScheme()
   const isDark = colorScheme === "dark"
   const insets = useSafeAreaInsets()
+  const { height: windowHeight, fontScale } = useWindowDimensions()
   const { t } = useTranslation()
 
   const flatListRef = useRef<FlatList>(null)
   const modelSheetRef = useRef<BottomSheet>(null)
   const variantSheetRef = useRef<BottomSheet>(null)
-  const [input, setInput] = useState("")
+  const [input, setInputState] = useState(() => (id ? useSessions.getState().drafts[id] || "" : ""))
+  const inputRef = useRef(input)
+  inputRef.current = input
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [showInfo, setShowInfo] = useState(false)
+  const [keyboard, setKeyboard] = useState(() => Keyboard.metrics() ?? null)
+  const keyboardHeight = keyboard?.height ?? 0
+
+  useEffect(() => {
+    if (Platform.OS !== "android") return
+    const show = Keyboard.addListener("keyboardDidShow", (event) => setKeyboard(event.endCoordinates))
+    const hide = Keyboard.addListener("keyboardDidHide", () => setKeyboard(null))
+    // Close the render-to-effect race: listeners are attached first, then the
+    // current native metrics become the source of truth.
+    setKeyboard(Keyboard.metrics() ?? null)
+    return () => {
+      show.remove()
+      hide.remove()
+    }
+  }, [])
+
+  const inputMaxHeight = composerMaxHeight(Platform.OS, windowHeight, keyboard?.screenY ?? null, insets.top, fontScale)
 
   const {
     currentSession,
@@ -94,12 +119,24 @@ export default function SessionScreen() {
     loadingMore,
     hasMore,
     selectSession,
+    setDraft,
+    clearDraft,
     sendMessage,
     abortSession,
     loadOlderMessages,
     revertToMessage,
     unrevertSession,
   } = useSessions()
+
+  const setInput = useCallback(
+    (value: string | ((current: string) => string)) => {
+      const next = typeof value === "function" ? value(inputRef.current) : value
+      inputRef.current = next
+      setInputState(next)
+      if (id) setDraft(id, next)
+    },
+    [id, setDraft],
+  )
 
   // Derive sending state for this specific session
   const isSending = useSessions((s) => !!(currentSession && s.sending[currentSession.id]))
@@ -131,6 +168,23 @@ export default function SessionScreen() {
   const questions = useEvents((s) => (sessionID ? s.questions[sessionID] : undefined)) || []
 
   const shortDir = getShortDir(currentSession?.directory)
+
+  // Branch/uncommitted change counts for this chat's repo; refreshed on focus
+  // and whenever the agent finishes a turn.
+  const changesDir = (currentSession?.id === id ? currentSession.directory : undefined) || directory
+  const changes = useHeadline(changesDir)
+  const refreshChanges = useCallback(
+    (force?: boolean) => {
+      if (changesDir) void useChanges.getState().prefetch([changesDir], force)
+    },
+    [changesDir],
+  )
+  useFocusEffect(useCallback(() => refreshChanges(), [refreshChanges]))
+  useOnTurnEnd(id, () => refreshChanges(true))
+  const openChanges = useCallback(() => {
+    if (!id) return
+    router.push({ pathname: "/changes/[id]", params: { id, directory: changesDir ?? "" } })
+  }, [id, changesDir, router])
   const [showScrollButton, setShowScrollButton] = useState(false)
 
   // SSE reconnect banner
@@ -194,9 +248,6 @@ export default function SessionScreen() {
   // handleMessageLongPress's deps — kept as a plain ref assignment (not
   // state) so the callback below stays referentially stable across
   // keystrokes for MessageBubble's custom memo comparator.
-  const inputRef = useRef(input)
-  inputRef.current = input
-
   const applyRevertResult = useCallback((result: Awaited<ReturnType<typeof revertToMessage>>) => {
     if (!result.ok) {
       if (result.reason === "unsupported") {
@@ -265,6 +316,9 @@ export default function SessionScreen() {
   useFocusEffect(
     useCallback(() => {
       if (!id) return
+      const draft = useSessions.getState().drafts[id] || ""
+      inputRef.current = draft
+      setInputState(draft)
       selectSession(id, directory).then(() => {
         // Re-fetch pending permissions/questions from the server to recover from
         // missed SSE events or failed optimistic removals
@@ -272,7 +326,7 @@ export default function SessionScreen() {
         const c = directory ? (connState.clientForDirectory(directory) ?? connState.client) : connState.client
         if (c) refreshPending(c, id)
       })
-    }, [id, directory]),
+    }, [id, directory, selectSession]),
   )
 
   // Sync model chip from latest assistant message
@@ -417,6 +471,7 @@ export default function SessionScreen() {
     const text = input.trim()
     const files = [...attachments]
     setInput("")
+    if (id) clearDraft(id)
     setAttachments([])
 
     // Server slash commands (no attachments for commands)
@@ -579,6 +634,20 @@ export default function SessionScreen() {
                   <Text style={[s.dirText, isDark && s.dirTextDark]}>{shortDir}</Text>
                 </View>
               )}
+              <TouchableOpacity
+                style={[s.changesChip, isDark && s.dirBadgeDark]}
+                onPress={openChanges}
+                hitSlop={8}
+                testID="header-changes"
+              >
+                <Ionicons name="git-compare-outline" size={14} color={isDark ? "#888888" : "#666666"} />
+                {changes && changes.files > 0 && (
+                  <>
+                    <Text style={s.changesAdd}>+{changes.additions}</Text>
+                    <Text style={s.changesDel}>-{changes.deletions}</Text>
+                  </>
+                )}
+              </TouchableOpacity>
               <TouchableOpacity onPress={() => setShowInfo((v) => !v)} hitSlop={8}>
                 <Ionicons
                   name={showInfo ? "stats-chart" : "stats-chart-outline"}
@@ -592,21 +661,25 @@ export default function SessionScreen() {
       />
 
       <KeyboardAvoidingView
-        style={[s.container, isDark && s.containerDark]}
-        // Both platforms use "padding" so the composer/toolbar is pushed up
-        // above the keyboard via JS-measured keyboard height.
-        //
+        style={[
+          s.container,
+          isDark && s.containerDark,
+          Platform.OS === "android" && { paddingBottom: keyboardPadding(Platform.OS, keyboardHeight) },
+        ]}
         // Android previously relied on the native android:windowSoftInputMode
         // (adjustResize, see AndroidManifest.xml) with behavior={undefined}
         // to let the OS resize the window (see #70/#53). Since adopting
         // Expo's mandatory edge-to-edge display, Android no longer resizes
         // the window when the keyboard opens — the system assumes insets are
         // handled dynamically — so adjustResize became a no-op and the
-        // bottom toolbar + input were left completely hidden behind the
-        // keyboard (#147). "padding" restores avoidance without depending
-        // on native resize.
-        behavior="padding"
-        keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
+        // bottom toolbar + input were left hidden behind the keyboard (#147).
+        //
+        // RN 0.81 handles Android keyboardDidHide as another frame-change
+        // event, so a non-zero vertical offset survives as stale padding.
+        // Android therefore uses the IME's reported height directly in style;
+        // the hide listener above explicitly resets it to zero.
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={keyboardVerticalOffset(Platform.OS, insets.top)}
       >
         {/* Session info pulldown */}
         <SessionInfo
@@ -624,6 +697,8 @@ export default function SessionScreen() {
             flatListRef.current?.scrollToEnd({ animated: true })
           }}
           onClose={() => setShowInfo(false)}
+          changes={changes}
+          onChangesPress={openChanges}
         />
 
         {/* SSE reconnect/connected banner */}
@@ -796,7 +871,7 @@ export default function SessionScreen() {
             </TouchableOpacity>
 
             <TextInput
-              style={[s.input, isDark && s.inputDark, speech.listening && s.inputListening]}
+              style={[s.input, isDark && s.inputDark, speech.listening && s.inputListening, { maxHeight: inputMaxHeight }]}
               placeholder={
                 speech.listening
                   ? t("session.input.placeholderListening")
@@ -809,6 +884,7 @@ export default function SessionScreen() {
               onChangeText={speech.listening ? undefined : setInput}
               editable={!speech.listening}
               multiline
+              scrollEnabled
               maxLength={10000}
               testID="chat-message-input"
             />
@@ -1044,6 +1120,17 @@ const s = StyleSheet.create({
     borderRadius: 6,
   },
   dirBadgeDark: { backgroundColor: "#1a1a1a" },
+  changesChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#f5f5f5",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  changesAdd: { fontSize: 12, fontWeight: "600", color: "#16a34a" },
+  changesDel: { fontSize: 12, fontWeight: "600", color: "#dc2626" },
   dirText: { fontSize: 12, color: "#666666", fontWeight: "500" },
   dirTextDark: { color: "#888888" },
 

@@ -75,6 +75,24 @@ export interface Message {
   finish?: string
 }
 
+// One file's change, as returned by /vcs/diff and /session/:id/diff.
+export interface FileDiff {
+  file: string
+  patch?: string
+  additions: number
+  deletions: number
+  status?: "added" | "deleted" | "modified"
+}
+
+// "git": working tree vs HEAD (uncommitted). "branch": working tree vs the
+// merge-base with the default branch (everything on this branch).
+export type VcsMode = "git" | "branch"
+
+export interface VcsInfo {
+  branch?: string
+  default_branch?: string
+}
+
 // API returns messages with parts embedded
 export interface MessageWithParts {
   info: Message
@@ -145,10 +163,16 @@ export interface Command {
   hints: string[]
 }
 
+// Server shape is { id, worktree, vcs?, name?, time }. `path` is the shape this
+// client used to assume; kept optional for older servers. Read the directory
+// with projectDir() from ./projects.
 export interface Project {
   id: string
   name?: string
-  path: {
+  worktree?: string
+  vcs?: "git"
+  time?: { created: number; updated: number; initialized?: number }
+  path?: {
     cwd: string
     root: string
     absolute: string
@@ -337,6 +361,21 @@ export function createClient(config: ClientConfig) {
       },
     },
 
+    // Version control state of this client's directory. The directory also
+    // goes in the query: a request without one is answered (200) for the
+    // server's default folder, i.e. silently the wrong repo.
+    vcs: {
+      get: () => {
+        const query = config.directory ? `?${new URLSearchParams({ directory: config.directory }).toString()}` : ""
+        return request<VcsInfo>(config, `/vcs${query}`)
+      },
+      diff: (mode: VcsMode) => {
+        const query = new URLSearchParams({ mode })
+        if (config.directory) query.set("directory", config.directory)
+        return request<FileDiff[]>(config, `/vcs/diff?${query.toString()}`)
+      },
+    },
+
     path: {
       get: () =>
         request<{ home: string; state: string; config: string; worktree: string; directory: string }>(config, "/path"),
@@ -449,8 +488,11 @@ export function createClient(config: ClientConfig) {
       abort: (sessionID: string) => request<boolean>(config, `/session/${sessionID}/abort`, { method: "POST" }),
 
       diff: (sessionID: string, messageID?: string) => {
-        const qs = messageID ? `?messageID=${messageID}` : ""
-        return request<unknown[]>(config, `/session/${sessionID}/diff${qs}`)
+        const query = new URLSearchParams()
+        if (messageID) query.set("messageID", messageID)
+        if (config.directory) query.set("directory", config.directory)
+        const qs = query.toString()
+        return request<FileDiff[]>(config, `/session/${sessionID}/diff${qs ? `?${qs}` : ""}`)
       },
 
       // Marks messageID (and everything after it) as pending revert. The
