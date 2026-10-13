@@ -123,7 +123,13 @@ jobs:
 
       - name: Build APK
         working-directory: android
-        run: ./gradlew assembleRelease
+        # arm64-v8a only: every current phone; the default list also compiles all native code for
+        # armeabi-v7a, x86 and x86_64. More heap/metaspace than gradle.properties (2 GiB / 512 MiB),
+        # where the daemon ran out of metaspace and restarted mid-build.
+        run: >-
+          ./gradlew assembleRelease
+          -PreactNativeArchitectures=arm64-v8a
+          "-Dorg.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v7
