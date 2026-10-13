@@ -16,7 +16,8 @@ name: "DiffView + CodeBlock horizontal scroll - wide diff/code line reachable by
 # default connection's directory) whose single assistant message already
 # contains:
 #   - a completed `edit` tool part with a wide "add" diff line (renders via
-#     ToolCallCard -> EditDetail -> DiffView once the card is expanded)
+#     WorkPane -> ToolCallCard -> EditDetail -> DiffView once the summary
+#     line is tapped and the card is expanded)
 #   - a text part with a wide fenced code block (renders via Markdown ->
 #     CodeBlock)
 # Both wide lines are ~220 filler characters (no spaces, so they can't
@@ -72,15 +73,16 @@ name: "DiffView + CodeBlock horizontal scroll - wide diff/code line reachable by
     timeout: 15000
 
 # History loaded via GET /session/seed-diff/message (not SSE) must already
-# render both the tool card and the markdown code block.
+# render the turn's summary line (the edit tool folds into it, see
+# src/lib/turns.ts) and the markdown code block.
 - assertVisible:
-    text: "Edit wide_diff_target.ts"
-# Diagnostic screenshot (issue #104): the tool-card title above renders via
+    id: "turn-summary"
+# Diagnostic screenshot (issue #104): the summary line above renders via
 # plain Text, while the paragraph below renders via react-native-marked's
 # nested FlatList inside this screen's own *inverted* FlatList. If this ever
 # regresses again, check whether this frame shows blank space between the
-# message header and the tool card (nested-FlatList-in-inverted-list content
-# not laying out) vs. genuinely missing/incorrect text.
+# message header and the summary line (nested-FlatList-in-inverted-list
+# content not laying out) vs. genuinely missing/incorrect text.
 - takeScreenshot: diffscroll-S1b_before_markdown_text_check
 - extendedWaitUntil:
     visible:
@@ -103,8 +105,12 @@ name: "DiffView + CodeBlock horizontal scroll - wide diff/code line reachable by
     text: "ZZZ_CODE_SCROLL_TARGET_ZZZ"
 - takeScreenshot: diffscroll-S4_codeblock_marker_revealed
 
-# --- DiffView: lives inside the collapsible tool card's detail section, so
-# expand it first.
+# --- DiffView: lives inside the collapsible tool card's detail section, in
+# the work pane — open the pane, then expand the card.
+- tapOn:
+    id: "turn-summary"
+- assertVisible:
+    id: "work-pane"
 - tapOn:
     text: "Edit wide_diff_target.ts"
 - assertVisible:

@@ -3,7 +3,7 @@
 // node --test, and safe to import from a screen that must never touch a
 // real connection. The shapes match src/lib/sdk.ts's Message/Part exactly
 // so the demo can render through the SAME presentational components
-// (MessageBubble, ToolCallCard, DiffView, PermissionPrompt) real sessions
+// (MessageBubble, TurnBubble, ToolCallCard, DiffView, PermissionPrompt) real sessions
 // use, instead of a parallel fake UI.
 import type { Message, Part } from "./sdk"
 
