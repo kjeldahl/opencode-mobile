@@ -1,4 +1,4 @@
-# iOS build gate for pull requests and main.
+# iOS build gate. The macOS build runs only by hand (see ios-build below).
 #
 # Requires NO Apple/EAS secrets: it validates the Expo config, exports the iOS JS
 # bundle, generates the native project, installs CocoaPods, and compiles an
@@ -10,16 +10,16 @@
 
 name: iOS CI
 
-# NOTE: no paths-ignore here. "Typecheck and unit tests" is a REQUIRED status
+# NOTE: no paths-ignore here. "Typecheck and unit tests" may be a REQUIRED status
 # check in branch protection; a path-filtered required check never runs on
 # docs-only PRs, leaving them permanently BLOCKED. Running the cheap Linux
-# typecheck/test job (and the gated macOS build) on every PR keeps the required
-# check satisfiable. See #143 (docs PR stuck) for why.
+# typecheck/test job on every PR keeps the required check satisfiable. See #143.
 on:
   pull_request:
     branches: [main]
   push:
     branches: [main]
+  workflow_dispatch: {}
 
 # Cancel superseded runs for the same ref (e.g. new push to an open PR).
 concurrency:
@@ -55,6 +55,9 @@ jobs:
   ios-build:
     name: Unsigned iOS Simulator build
     needs: test
+    # Manual only: the fork ships Android only, and this added ~7 min of macOS runner time to every
+    # PR and push. A skipped job still satisfies a required check. Run it from the Actions tab.
+    if: github.event_name == 'workflow_dispatch'
     # macos-15 ships Xcode 16.x, which React Native 0.81 / Expo SDK 54 require.
     runs-on: macos-15
     timeout-minutes: 45
