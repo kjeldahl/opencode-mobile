@@ -37,7 +37,7 @@ export function WorkPane({ visible, title, work, isDark, onClose }: Props) {
           <ScrollView contentContainerStyle={s.list}>
             {work.map((part) => {
               if (part.type === "tool") return <ToolCallCard key={part.id} tool={part} isDark={isDark} />
-              if (part.type === "reasoning") return <ReasoningBlock key={part.id} text={part.text || ""} isDark={isDark} />
+              if (part.type === "reasoning") return <ReasoningBlock key={part.id} text={part.text || ""} isDark={isDark} style={s.reasoning} />
               return (
                 <View key={part.id} style={s.note}>
                   <Markdown>{part.text || ""}</Markdown>
@@ -67,5 +67,8 @@ const s = StyleSheet.create({
   title: { flex: 1, fontSize: 15, fontWeight: "600", color: "#0a0a0a" },
   titleDark: { color: "#ffffff" },
   list: { paddingBottom: 8, gap: 2 },
+  // Every item gets the same top margin as ToolCallCard (marginTop 8) so
+  // gaps are even; ReasoningBlock's own bottom margin is dropped here.
+  reasoning: { marginTop: 8, marginBottom: 0 },
   note: { marginTop: 8, paddingHorizontal: 6 },
 })
