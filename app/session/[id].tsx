@@ -24,6 +24,7 @@ import * as Clipboard from "expo-clipboard"
 import type BottomSheet from "@gorhom/bottom-sheet"
 import {
   MessageBubble,
+  TurnBubble,
   PermissionPrompt,
   QuestionPrompt,
   StatusIndicator,
@@ -38,6 +39,7 @@ import {
 import { useSessions } from "../../src/stores/sessions"
 import { useEvents, refreshPending } from "../../src/stores/events"
 import { useConnections } from "../../src/stores/connections"
+import { buildRows } from "../../src/lib/turns"
 import { useAuth } from "../../src/stores/auth"
 import { useCatalog } from "../../src/stores/catalog"
 import { useSpeech } from "../../src/lib/speech"
@@ -231,17 +233,27 @@ export default function SessionScreen() {
   // message sent concurrently with a revert isn't hidden.
   const revertMessageID = currentSession?.revert?.messageID
 
-  // Inverted FlatList: data is reversed (newest first) so newest renders at bottom
+  // Busy = SSE says not idle, or the optimistic send flag before SSE confirms
+  // (same rule as StatusIndicator). Only the in-flight turn shows live tools.
+  const busy = useEvents((s) => {
+    const status = currentSession ? s.sessionStatus[currentSession.id] : undefined
+    return status ? status.type !== "idle" : isSending
+  })
+
+  // Inverted FlatList: data is reversed (newest first) so newest renders at bottom.
+  // Consecutive assistant messages fold into one turn row (see lib/turns).
   const messageData = useMemo(
     () =>
-      (messages || [])
-        .filter((msg) => !revertMessageID || msg.id.startsWith("temp-") || msg.id < revertMessageID)
-        .map((msg) => ({
-          message: msg,
-          parts: (parts && parts[msg.id]) || [],
-        }))
-        .reverse(),
-    [messages, parts, revertMessageID],
+      buildRows(
+        (messages || [])
+          .filter((msg) => !revertMessageID || msg.id.startsWith("temp-") || msg.id < revertMessageID)
+          .map((msg) => ({
+            message: msg,
+            parts: (parts && parts[msg.id]) || [],
+          })),
+        busy,
+      ).reverse(),
+    [messages, parts, revertMessageID, busy],
   )
 
   // Tracks the latest composer text without pulling `input` into
@@ -744,15 +756,19 @@ export default function SessionScreen() {
               ref={flatListRef}
               data={messageData}
               inverted
-              keyExtractor={(item) => item.message.id}
-              renderItem={({ item }) => (
-                <MessageBubble
-                  message={item.message}
-                  parts={item.parts}
-                  isDark={isDark}
-                  onLongPress={handleMessageLongPress}
-                />
-              )}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item }) =>
+                item.kind === "turn" ? (
+                  <TurnBubble turn={item.turn} isDark={isDark} />
+                ) : (
+                  <MessageBubble
+                    message={item.entry.message}
+                    parts={item.entry.parts}
+                    isDark={isDark}
+                    onLongPress={handleMessageLongPress}
+                  />
+                )
+              }
               contentContainerStyle={s.messageList}
               onScroll={handleScroll}
               scrollEventThrottle={100}

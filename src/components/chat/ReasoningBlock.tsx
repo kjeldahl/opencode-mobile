@@ -1,20 +1,21 @@
 import { useState } from "react"
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native"
+import { View, Text, TouchableOpacity, StyleSheet, type StyleProp, type ViewStyle } from "react-native"
 import { Ionicons } from "@expo/vector-icons"
 import { useTranslation } from "react-i18next"
 
 interface Props {
   text: string
   isDark: boolean
+  style?: StyleProp<ViewStyle>
 }
 
-export function ReasoningBlock({ text, isDark }: Props) {
+export function ReasoningBlock({ text, isDark, style }: Props) {
   const { t } = useTranslation()
   const [expanded, setExpanded] = useState(false)
 
   return (
     <TouchableOpacity
-      style={[s.block, isDark && s.blockDark]}
+      style={[s.block, isDark && s.blockDark, style]}
       onPress={() => setExpanded(!expanded)}
       activeOpacity={0.7}
     >

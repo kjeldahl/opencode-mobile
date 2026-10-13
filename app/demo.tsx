@@ -3,7 +3,8 @@ import { View, Text, ScrollView, TouchableOpacity, StyleSheet, useColorScheme, L
 import { Stack, useRouter } from "expo-router"
 import { Ionicons } from "@expo/vector-icons"
 import { useTranslation } from "react-i18next"
-import { MessageBubble, PermissionPrompt } from "../src/components/chat"
+import { MessageBubble, TurnBubble, PermissionPrompt } from "../src/components/chat"
+import { buildRows } from "../src/lib/turns"
 import { buildDemoScript, buildDemoCompletionMessage, buildDemoDenialMessage } from "../src/lib/demo-script"
 import { SETUP_GUIDE_URL } from "../src/lib/links"
 import { track, AnalyticsEvent } from "../src/lib/analytics"
@@ -54,7 +55,12 @@ export default function DemoScreen() {
     return reply === "reject" ? buildDemoDenialMessage() : buildDemoCompletionMessage()
   }, [reply])
 
-  const [userMessage, assistantMessage] = script.messages
+  // Same turn folding as a real session: once the completion arrives it joins
+  // the assistant turn, so the summary line + final answer render together.
+  const rows = useMemo(() => {
+    const entries = script.messages.map((message) => ({ message, parts: script.parts[message.id] || [] }))
+    return buildRows(completion ? [...entries, completion] : entries, false)
+  }, [script, completion])
 
   return (
     <>
@@ -66,14 +72,15 @@ export default function DemoScreen() {
         </View>
 
         <ScrollView contentContainerStyle={s.scrollContent} keyboardShouldPersistTaps="handled">
-          <MessageBubble message={userMessage} parts={script.parts[userMessage.id] || []} isDark={isDark} />
-          <MessageBubble message={assistantMessage} parts={script.parts[assistantMessage.id] || []} isDark={isDark} />
+          {rows.map((row) =>
+            row.kind === "turn" ? (
+              <TurnBubble key={row.id} turn={row.turn} isDark={isDark} />
+            ) : (
+              <MessageBubble key={row.id} message={row.entry.message} parts={row.entry.parts} isDark={isDark} />
+            ),
+          )}
 
           {!reply && <PermissionPrompt permission={script.permission} isDark={isDark} onReply={handleReply} />}
-
-          {completion && (
-            <MessageBubble message={completion.message} parts={completion.parts} isDark={isDark} />
-          )}
 
           <View style={[s.ctaCard, isDark && s.ctaCardDark]} testID="demo-cta-card">
             <Text style={[s.ctaTitle, isDark && s.textWhite]}>{t("demo.ctaTitle")}</Text>
