@@ -33,6 +33,8 @@ import {
   ImageAttachments,
   SessionInfo,
   PrButton,
+  PrMenu,
+  usePr,
   type SlashCommand,
   type Attachment,
 } from "../../src/components/chat"
@@ -195,6 +197,10 @@ export default function SessionScreen() {
     },
     [sendMessage, model, agent, variant, t],
   )
+  const pr = usePr(changesDir, messages || [], parts, isSending || sessionBusy)
+  const [prMenu, setPrMenu] = useState(false)
+  // Toolbar top within the screen: the PR menu overlays everything above it.
+  const [toolbarTop, setToolbarTop] = useState(0)
   const openChanges = useCallback(() => {
     if (!id) return
     router.push({ pathname: "/changes/[id]", params: { id, directory: changesDir ?? "" } })
@@ -830,7 +836,10 @@ export default function SessionScreen() {
         )}
 
         {/* Agent/model toolbar */}
-        <View style={[s.toolbar, isDark && s.toolbarDark]}>
+        <View
+          style={[s.toolbar, isDark && s.toolbarDark]}
+          onLayout={(event) => setToolbarTop(event.nativeEvent.layout.y)}
+        >
           <TouchableOpacity
             style={[s.agentChip, { borderColor: agentColor }]}
             onPress={() => cycleAgent()}
@@ -865,14 +874,7 @@ export default function SessionScreen() {
             </TouchableOpacity>
           )}
 
-          <PrButton
-            directory={changesDir}
-            messages={messages || []}
-            parts={parts}
-            busy={isSending || sessionBusy}
-            isDark={isDark}
-            onSend={sendPr}
-          />
+          {pr && <PrButton model={pr} open={prMenu} onPress={() => setPrMenu((open) => !open)} />}
         </View>
 
         {/* Attachment preview */}
@@ -937,6 +939,11 @@ export default function SessionScreen() {
             )}
           </View>
         </View>
+
+        {/* PR menu: in-tree overlay (not a Modal) so the keyboard stays up */}
+        {prMenu && pr && (
+          <PrMenu model={pr} height={toolbarTop} isDark={isDark} onClose={() => setPrMenu(false)} onSend={sendPr} />
+        )}
       </KeyboardAvoidingView>
 
       {/* Model picker bottom sheet */}

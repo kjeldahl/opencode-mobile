@@ -92,7 +92,8 @@ test("prView maps state to label, tone and actions", () => {
   assert.deepEqual(prView({ ready: true, pr: undefined, action: undefined, busy: false }), {
     label: "create",
     tone: "neutral",
-    primary: "create",
+    canCreate: true,
+    canRefresh: false,
     canWatch: false,
     canMerge: false,
   })
@@ -101,7 +102,8 @@ test("prView maps state to label, tone and actions", () => {
   assert.deepEqual(prView({ ready: false, pr, action: undefined, busy: false }), {
     label: "passing",
     tone: "success",
-    primary: "status",
+    canCreate: false,
+    canRefresh: true,
     canWatch: false,
     canMerge: true,
   })
@@ -112,6 +114,8 @@ test("prView maps state to label, tone and actions", () => {
   const watching = prView({ ready: false, pr: { ...pr, checks: "failing" }, action: "watch", busy: true })
   assert.equal(watching?.label, "watching")
   assert.equal(watching?.canWatch, false)
+  assert.equal(watching?.canRefresh, false)
+  assert.equal(prView({ ready: true, pr: undefined, action: "status", busy: true })?.canCreate, false)
   assert.equal(prView({ ready: false, pr: { ...pr, state: "merged" }, action: undefined, busy: false })?.label, "merged")
 })
 

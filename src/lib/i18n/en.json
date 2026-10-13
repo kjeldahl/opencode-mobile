@@ -409,15 +409,12 @@
         "unknown": "Open"
       },
       "menu": {
-        "openGithub": "Open on GitHub",
+        "openGithub": "View on GitHub",
         "refresh": "Refresh status",
         "watch": "Watch & fix checks",
-        "merge": "Merge PR"
-      },
-      "mergeConfirm": {
-        "title": "Merge pull request?",
-        "message": "Ask the agent to merge PR #{{number}}.",
-        "confirm": "Merge"
+        "merge": "Merge PR",
+        "create": "Create PR",
+        "confirmMerge": "Tap again to merge #{{number}}"
       }
     }
   },

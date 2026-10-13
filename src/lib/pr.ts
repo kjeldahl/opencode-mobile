@@ -126,8 +126,8 @@ export type PrTone = "neutral" | "success" | "danger" | "warning" | "merged" | "
 export interface PrView {
   label: PrLabel
   tone: PrTone
-  // Main button press: create the PR, or refresh its status.
-  primary?: "create" | "status"
+  canCreate: boolean
+  canRefresh: boolean
   canWatch: boolean
   canMerge: boolean
 }
@@ -159,14 +159,16 @@ export function prView(input: {
   const open = pr?.state === "open"
   const idle = !busy
   const view = {
+    canCreate: idle && !pr && ready,
+    canRefresh: idle && !!pr,
     canWatch: idle && open && pr?.checks !== "passing",
     canMerge: idle && open && pr?.checks === "passing",
   }
   if (busy && action) return { ...view, label: RUNNING[action], tone: "busy" }
-  if (!pr) return { ...view, label: "create", tone: "neutral", primary: idle ? "create" : undefined }
+  if (!pr) return { ...view, label: "create", tone: "neutral" }
   if (pr.state === "merged") return { ...view, label: "merged", tone: "merged" }
   if (pr.state === "closed") return { ...view, label: "closed", tone: "neutral" }
-  return { ...view, label: pr.checks, tone: TONES[pr.checks], primary: idle ? "status" : undefined }
+  return { ...view, label: pr.checks, tone: TONES[pr.checks] }
 }
 
 const REPORT = [

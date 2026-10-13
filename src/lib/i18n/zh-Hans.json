@@ -409,15 +409,12 @@
         "unknown": "已打开"
       },
       "menu": {
-        "openGithub": "在 GitHub 上打开",
+        "openGithub": "在 GitHub 上查看",
         "refresh": "刷新状态",
         "watch": "监视并修复检查",
-        "merge": "合并 PR"
-      },
-      "mergeConfirm": {
-        "title": "合并拉取请求？",
-        "message": "让代理合并 PR #{{number}}。",
-        "confirm": "合并"
+        "merge": "合并 PR",
+        "create": "创建 PR",
+        "confirmMerge": "再次点击以合并 #{{number}}"
       }
     }
   },
