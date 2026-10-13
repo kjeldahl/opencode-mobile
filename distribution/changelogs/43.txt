@@ -1,0 +1,7 @@
+v0.5.0 — OpenCode forge: first fork release
+
+• Own app ID (it.kjeldahl.opencode) and name, installs next to the store app; every build signed with one key.
+• No telemetry: Sentry, PostHog, Chatwoot and the waitlist are gone.
+• Message box stays above the keyboard, also on the connection forms; draft kept per chat.
+• Changes view per chat: Branch, Uncommitted and This turn, with a fullscreen diff per file.
+• opencode://connect links open a workspace directly; new chats start in the right repo.
