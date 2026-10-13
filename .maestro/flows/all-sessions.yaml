@@ -1,4 +1,4 @@
-appId: cc.agentlabs.opencode
+appId: it.kjeldahl.opencode
 name: All sessions across directories - list + open-across-project (regression #46/#48)
 ---
 # New-feature regression coverage for the "all sessions across all projects"
@@ -31,11 +31,6 @@ name: All sessions across directories - list + open-across-project (regression #
 
 - launchApp:
     clearState: true
-- assertVisible:
-    id: "telemetry-consent-card"
-- tapOn:
-    id: "telemetry-decline-button"
-
 - assertVisible:
     text: "No Connection"
 - tapOn:

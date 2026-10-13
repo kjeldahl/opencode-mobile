@@ -1,4 +1,4 @@
-appId: cc.agentlabs.opencode
+appId: it.kjeldahl.opencode
 name: "DiffView + CodeBlock horizontal scroll - wide diff/code line reachable by swipe (closes #21)"
 ---
 # GitHub issue #21 ("QA: verify DiffView + CodeBlock horizontal-scroll
@@ -39,11 +39,6 @@ name: "DiffView + CodeBlock horizontal scroll - wide diff/code line reachable by
 
 - launchApp:
     clearState: true
-- assertVisible:
-    id: "telemetry-consent-card"
-- tapOn:
-    id: "telemetry-decline-button"
-
 - assertVisible:
     text: "No Connection"
 - tapOn:

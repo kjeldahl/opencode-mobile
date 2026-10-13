@@ -1,4 +1,4 @@
-appId: cc.agentlabs.opencode
+appId: it.kjeldahl.opencode
 name: Variant picker - reasoning-effort chip renders, selects, and still sends
 ---
 # New-feature regression coverage for VariantPicker
@@ -29,11 +29,6 @@ name: Variant picker - reasoning-effort chip renders, selects, and still sends
 
 - launchApp:
     clearState: true
-- assertVisible:
-    id: "telemetry-consent-card"
-- tapOn:
-    id: "telemetry-decline-button"
-
 - assertVisible:
     text: "No Connection"
 - tapOn:
