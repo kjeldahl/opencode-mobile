@@ -13,9 +13,6 @@ import {
   ActivityIndicator,
   Alert,
   useWindowDimensions,
-  type CellRendererProps,
-  type NativeSyntheticEvent,
-  type NativeScrollEvent,
 } from "react-native"
 import { useLocalSearchParams, Stack, useRouter, useFocusEffect } from "expo-router"
 import { Ionicons } from "@expo/vector-icons"
@@ -46,7 +43,6 @@ import { useCatalog } from "../../src/stores/catalog"
 import { useSpeech } from "../../src/lib/speech"
 import { keyboardPadding, keyboardVerticalOffset } from "../../src/lib/keyboard-offset"
 import { composerMaxHeight } from "../../src/lib/session-layout"
-import { MessageNavigation } from "../../src/lib/message-navigation"
 import { useChanges, useHeadline, useOnTurnEnd } from "../../src/stores/changes"
 
 // --- Builtin slash commands ---
@@ -90,9 +86,6 @@ export default function SessionScreen() {
   const { t } = useTranslation()
 
   const flatListRef = useRef<FlatList>(null)
-  const navigation = useRef(new MessageNavigation()).current
-  const retry = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
-  const attempts = useRef(0)
   const modelSheetRef = useRef<BottomSheet>(null)
   const variantSheetRef = useRef<BottomSheet>(null)
   const [input, setInputState] = useState(() => (id ? useSessions.getState().drafts[id] || "" : ""))
@@ -242,7 +235,6 @@ export default function SessionScreen() {
   const messageData = useMemo(
     () =>
       (messages || [])
-        .filter((msg) => msg.role === "user" || msg.role === "assistant")
         .filter((msg) => !revertMessageID || msg.id.startsWith("temp-") || msg.id < revertMessageID)
         .map((msg) => ({
           message: msg,
@@ -251,42 +243,6 @@ export default function SessionScreen() {
         .reverse(),
     [messages, parts, revertMessageID],
   )
-
-  navigation.sync(messageData.map((item) => item.message.id))
-
-  const seekMessage = useCallback(() => {
-    if (retry.current) clearTimeout(retry.current)
-    if (flatListRef.current && navigation.seek(flatListRef.current, attempts.current++)) {
-      retry.current = setTimeout(seekMessage, 100)
-    }
-  }, [navigation])
-
-  const MessageCell = useCallback((props: CellRendererProps<(typeof messageData)[number]>) => {
-    const key = props.item.message.id
-    const { onLayout, ...cell } = props
-    useEffect(() => () => { navigation.frames.delete(key) }, [key, navigation])
-    return (
-      <View {...cell} onLayout={(event) => {
-        navigation.frames.set(key, event.nativeEvent.layout)
-        onLayout?.(event)
-        if (navigation.target === key) seekMessage()
-      }}>
-        {props.children}
-      </View>
-    )
-  }, [navigation, seekMessage])
-
-  useEffect(() => {
-    navigation.manual()
-    navigation.frames.clear()
-    return () => { if (retry.current) clearTimeout(retry.current) }
-  }, [id, navigation])
-
-  const moveMessage = (direction: 1 | -1) => {
-    if (navigation.move(direction) === undefined) return
-    attempts.current = 0
-    seekMessage()
-  }
 
   // Tracks the latest composer text without pulling `input` into
   // handleMessageLongPress's deps — kept as a plain ref assignment (not
@@ -347,10 +303,8 @@ export default function SessionScreen() {
   }, [applyRevertResult, t])
 
   const scrollToBottom = useCallback((animated = true) => {
-    navigation.manual(0)
-    if (retry.current) clearTimeout(retry.current)
     flatListRef.current?.scrollToOffset({ offset: 0, animated })
-  }, [navigation])
+  }, [])
 
   // Re-select on every focus, not just mount. currentSession/messages/
   // permissions are a single global store, and the native stack keeps screens
@@ -552,11 +506,10 @@ export default function SessionScreen() {
   }
 
   // In inverted mode, offset 0 = bottom. Show scroll button when scrolled away from bottom.
-  const handleScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const { contentOffset, layoutMeasurement } = event.nativeEvent
-    navigation.observe(contentOffset.y, layoutMeasurement.height)
+  const handleScroll = useCallback((event: any) => {
+    const { contentOffset } = event.nativeEvent
     setShowScrollButton(contentOffset.y > 200)
-  }, [navigation])
+  }, [])
 
   // Debounce: onEndReached can fire multiple times during a single scroll gesture
   const loadingTriggered = useRef(false)
@@ -741,8 +694,6 @@ export default function SessionScreen() {
             if (hasMore && !loadingMore) loadOlderMessages()
           }}
           onScrollToTop={() => {
-            navigation.manual()
-            if (retry.current) clearTimeout(retry.current)
             flatListRef.current?.scrollToEnd({ animated: true })
           }}
           onClose={() => setShowInfo(false)}
@@ -793,17 +744,6 @@ export default function SessionScreen() {
               ref={flatListRef}
               data={messageData}
               inverted
-              CellRendererComponent={MessageCell}
-              onLayout={(event) => {
-                navigation.observe(navigation.offset, event.nativeEvent.layout.height)
-              }}
-              onScrollBeginDrag={() => {
-                navigation.manual()
-                if (retry.current) clearTimeout(retry.current)
-              }}
-              onScrollToIndexFailed={({ index, averageItemLength }) => {
-                flatListRef.current?.scrollToOffset({ offset: averageItemLength * index, animated: false })
-              }}
               keyExtractor={(item) => item.message.id}
               renderItem={({ item }) => (
                 <MessageBubble
@@ -838,25 +778,10 @@ export default function SessionScreen() {
                 <Text style={[s.emptyHint, isDark && s.metaDark]}>{t("session.empty.hint")}</Text>
               </View>
             )}
-            {messageData.length > 0 && (
-              <View style={s.scrollControls}>
-                <TouchableOpacity accessibilityRole="button" accessibilityLabel="Previous message"
-                  style={[s.scrollBtn, isDark && s.scrollBtnDark]} onPress={() => moveMessage(1)}>
-                  <Ionicons name="chevron-up" size={24} color={isDark ? "#ffffff" : "#0a0a0a"} />
-                </TouchableOpacity>
-                <TouchableOpacity accessibilityRole="button" accessibilityLabel="Next message"
-                  style={[s.scrollBtn, isDark && s.scrollBtnDark]} onPress={() => moveMessage(-1)}>
-                  <Ionicons name="chevron-down" size={24} color={isDark ? "#ffffff" : "#0a0a0a"} />
-                </TouchableOpacity>
-                {showScrollButton && (
-                  <TouchableOpacity accessibilityRole="button" accessibilityLabel="Latest"
-                    style={[s.scrollBtn, isDark && s.scrollBtnDark]} onPress={() => scrollToBottom(true)}>
-                    <Ionicons name="chevron-down" size={20} style={{ marginBottom: -10 }} color={isDark ? "#ffffff" : "#0a0a0a"} />
-                    <Ionicons name="chevron-down" size={20} color={isDark ? "#ffffff" : "#0a0a0a"} />
-                  </TouchableOpacity>
-                )}
-                {!showScrollButton && <View style={{ height: 44 }} />}
-              </View>
+            {showScrollButton && (
+              <TouchableOpacity style={[s.scrollBtn, isDark && s.scrollBtnDark]} onPress={() => scrollToBottom(true)}>
+                <Ionicons name="chevron-down" size={24} color={isDark ? "#ffffff" : "#0a0a0a"} />
+              </TouchableOpacity>
             )}
           </View>
         )}
@@ -1019,23 +944,13 @@ const s = StyleSheet.create({
   listWrap: { flex: 1, position: "relative" },
 
   // Messages
-  // Reserve 44pt controls + 16pt inset + 16pt gap on the physical right.
-  // Android's inverted list flips both axes, so its content padding is mirrored.
-  messageList: {
-    padding: 16,
-    paddingBottom: 8,
-    paddingLeft: Platform.OS === "android" ? 76 : 16,
-    paddingRight: Platform.OS === "android" ? 16 : 76,
-  },
+  messageList: { padding: 16, paddingBottom: 8 },
 
   // Scroll button
-  scrollControls: {
+  scrollBtn: {
     position: "absolute",
     bottom: 16,
     right: 16,
-    gap: 4,
-  },
-  scrollBtn: {
     width: 44,
     height: 44,
     borderRadius: 22,
