@@ -66,7 +66,7 @@ export function PrButton({ directory, messages, parts, busy, isDark, onSend }: P
 
   const color = COLORS[view.tone]
   const label = t(`chat.prButton.labels.${view.label}`)
-  const text = pr && view.label !== "create" ? `#${pr.number} · ${label}` : label
+  const text = pr && view.label !== "create" ? `#${pr.number} ${label}` : label
   const icon = ICONS[view.label] ?? "git-pull-request-outline"
 
   const items: Array<{ key: string; icon: string; label: string; enabled: boolean; onPress: () => void }> = [
@@ -130,7 +130,7 @@ export function PrButton({ directory, messages, parts, busy, isDark, onSend }: P
       </TouchableOpacity>
 
       <Modal visible={menu} transparent animationType="fade" onRequestClose={() => setMenu(false)}>
-        <Pressable style={[s.backdrop, { paddingBottom: insets.bottom + 72 }]} onPress={() => setMenu(false)}>
+        <Pressable style={[s.backdrop, { paddingBottom: insets.bottom + 112 }]} onPress={() => setMenu(false)}>
           <View style={[s.menu, isDark && s.menuDark]}>
             <Text style={[s.title, isDark && s.titleDark]} numberOfLines={1}>
               {pr ? `#${pr.number} · ${info.branch}` : info.branch}
@@ -161,7 +161,6 @@ const s = StyleSheet.create({
     marginLeft: "auto",
     borderWidth: 1,
     borderRadius: 12,
-    flexShrink: 1,
   },
   main: {
     flexDirection: "row",
@@ -170,7 +169,6 @@ const s = StyleSheet.create({
     paddingLeft: 8,
     paddingRight: 6,
     paddingVertical: 4,
-    flexShrink: 1,
   },
   label: { fontSize: 12, fontWeight: "600" },
   chevron: {

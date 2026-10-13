@@ -396,15 +396,15 @@
     "prButton": {
       "labels": {
         "create": "Create PR",
-        "creating": "Creating PR…",
+        "creating": "Creating…",
         "checking": "Checking…",
-        "watching": "Watching…",
+        "watching": "Fixing…",
         "merging": "Merging…",
         "merged": "Merged",
         "closed": "Closed",
-        "pending": "Checks running",
-        "passing": "Checks passed",
-        "failing": "Checks failed",
+        "pending": "Running",
+        "passing": "Passed",
+        "failing": "Failed",
         "none": "No checks",
         "unknown": "Open"
       },

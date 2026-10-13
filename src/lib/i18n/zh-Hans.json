@@ -396,15 +396,15 @@
     "prButton": {
       "labels": {
         "create": "创建 PR",
-        "creating": "正在创建 PR…",
-        "checking": "正在检查…",
-        "watching": "正在监视…",
-        "merging": "正在合并…",
+        "creating": "创建中…",
+        "checking": "检查中…",
+        "watching": "修复中…",
+        "merging": "合并中…",
         "merged": "已合并",
         "closed": "已关闭",
-        "pending": "检查进行中",
-        "passing": "检查已通过",
-        "failing": "检查失败",
+        "pending": "运行中",
+        "passing": "已通过",
+        "failing": "失败",
         "none": "无检查",
         "unknown": "已打开"
       },
