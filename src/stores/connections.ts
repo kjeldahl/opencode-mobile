@@ -38,7 +38,8 @@ interface ConnectionsState {
 
   // Actions
   loadConnections: () => Promise<void>
-  addConnection: (connection: Omit<ServerConnection, "id">, password?: string) => Promise<void>
+  // Resolves to the new connection id.
+  addConnection: (connection: Omit<ServerConnection, "id">, password?: string) => Promise<string>
   removeConnection: (id: string) => Promise<void>
   setActiveConnection: (id: string) => Promise<void>
   // `source` distinguishes the activation funnel (onboarding) from the edit
@@ -183,6 +184,7 @@ export const useConnections = create<ConnectionsState>((set, get) => ({
     }
 
     set({ connections, activeConnection, client, clientBase: base, currentProject: project, serverHome })
+    return id
   },
 
   removeConnection: async (id) => {

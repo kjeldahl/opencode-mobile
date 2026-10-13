@@ -474,5 +474,19 @@
       "deleted": "删除",
       "modified": "修改"
     }
+  },
+  "connect": {
+    "title": "打开工作区",
+    "newIntro": "添加此工作区。密码只需输入一次，并保存在本机。",
+    "server": "服务器",
+    "directory": "仓库",
+    "name": "名称",
+    "user": "用户名",
+    "password": "密码",
+    "submit": "连接",
+    "failed": "无法连接。",
+    "opening": "正在打开 {{name}}…",
+    "invalid": "此链接没有有效的服务器地址。",
+    "home": "前往会话"
   }
 }

@@ -474,5 +474,19 @@
       "deleted": "deleted",
       "modified": "modified"
     }
+  },
+  "connect": {
+    "title": "Open workspace",
+    "newIntro": "Add this workspace. The password is asked once and stored on this phone.",
+    "server": "Server",
+    "directory": "Repository",
+    "name": "Name",
+    "user": "Username",
+    "password": "Password",
+    "submit": "Connect",
+    "failed": "Could not connect.",
+    "opening": "Opening {{name}}…",
+    "invalid": "This link has no valid server URL.",
+    "home": "Go to sessions"
   }
 }
