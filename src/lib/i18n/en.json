@@ -285,7 +285,8 @@
       "browseFoldersHint": "Explore the server's filesystem",
       "enterPathLabel": "Enter Path Manually",
       "createInButton": "Create in {{dir}}",
-      "createSessionButton": "Create Session"
+      "createSessionButton": "Create Session",
+      "noChangeTracking": "no change tracking"
     },
     "renameModal": {
       "title": "Rename Session"

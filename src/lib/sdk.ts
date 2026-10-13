@@ -163,10 +163,16 @@ export interface Command {
   hints: string[]
 }
 
+// Server shape is { id, worktree, vcs?, name?, time }. `path` is the shape this
+// client used to assume; kept optional for older servers. Read the directory
+// with projectDir() from ./projects.
 export interface Project {
   id: string
   name?: string
-  path: {
+  worktree?: string
+  vcs?: "git"
+  time?: { created: number; updated: number; initialized?: number }
+  path?: {
     cwd: string
     root: string
     absolute: string

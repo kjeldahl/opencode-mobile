@@ -30,6 +30,7 @@ import { DirectorySwitcher, DirectoryBrowserSheet } from "../../src/components/c
 import { groupByDirectory } from "../../src/lib/session-grouping"
 import { UpdateBanner } from "../../src/components/UpdateBanner"
 import { nameOf } from "../../src/lib/path-utils"
+import { newChatDir, newChatProjects, projectDir, projectName, tracksChanges } from "../../src/lib/projects"
 import { SETUP_GUIDE_URL } from "../../src/lib/links"
 
 function formatTime(timestamp: number, t: (key: string, opts?: Record<string, unknown>) => string): string {
@@ -150,14 +151,10 @@ function GroupHeader({
 }
 
 // Get short directory name (last folder or project name)
-function getShortPath(
-  project: { path?: { cwd?: string; root?: string; absolute?: string }; name?: string } | null | undefined,
-): string {
+function getShortPath(project: Project | null | undefined): string {
   if (!project) return ""
   if (project.name) return project.name
-  if (!project.path?.absolute) return ""
-  const parts = project.path.absolute.split("/").filter(Boolean)
-  return parts[parts.length - 1] || project.path.absolute
+  return projectDir(project)?.split("/").filter(Boolean).pop() || projectDir(project) || ""
 }
 
 export default function SessionsScreen() {
@@ -243,6 +240,10 @@ export default function SessionsScreen() {
       .then(setServerProjects)
       .catch(() => setServerProjects([]))
   }, [showNewSession, client])
+
+  const projects = useMemo(() => newChatProjects(serverProjects), [serverProjects])
+  const projectDirs = useMemo(() => new Set(projects.map((p) => projectDir(p))), [projects])
+  const currentDir = projectDir(currentProject) || activeConnection?.directory
 
   const handleSwitchDirectory = useCallback(
     async (dir?: string) => {
@@ -438,7 +439,13 @@ export default function SessionsScreen() {
   }, [])
 
   const onFabPress = () => {
-    // Quick create in current project
+    // Quick create: the connection's default directory (set by workspace
+    // links), else the last project a chat was started in.
+    const dir = newChatDir(activeConnection?.directory, recentDirectories)
+    if (dir && dir !== activeConnection?.directory) {
+      onCreateInDirectory(dir)
+      return
+    }
     onCreateSession()
   }
 
@@ -620,32 +627,75 @@ export default function SessionsScreen() {
             </View>
 
             <ScrollView style={styles.modalScrollBody} keyboardShouldPersistTaps="handled">
-              {/* Current directory — tapping creates session immediately */}
-              <Text style={[styles.modalLabel, isDark && styles.metaDark]}>
-                {t("sessionsList.newSessionModal.currentProjectLabel")}
-              </Text>
-              <TouchableOpacity
-                style={[styles.modalDirBox, isDark && styles.modalDirBoxDark]}
-                onPress={() => onCreateInDirectory()}
-                disabled={isCreating}
-              >
-                <Ionicons name="folder" size={20} color={isDark ? "#8b5cf6" : "#6d28d9"} />
-                <Text style={[styles.modalDirText, isDark && styles.textDark]} numberOfLines={2}>
-                  {currentProject?.path?.absolute || activeConnection?.directory || t("sessionsList.newSessionModal.serverDefault")}
-                </Text>
-                <Ionicons name="arrow-forward-circle" size={20} color={isDark ? "#8b5cf6" : "#6d28d9"} />
-              </TouchableOpacity>
+              {/* Server projects first: git repos (change tracking) before the rest */}
+              {projects.length > 0 && (
+                <>
+                  <Text style={[styles.modalLabel, isDark && styles.metaDark]}>
+                    {t("sessionsList.newSessionModal.serverProjectsLabel")}
+                  </Text>
+                  {projects.map((p) => {
+                    const dir = projectDir(p)
+                    const isCurrent = dir === currentDir
+                    return (
+                      <TouchableOpacity
+                        key={p.id}
+                        style={[styles.projectRow, isDark && styles.projectRowDark, isCurrent && styles.projectRowActive]}
+                        onPress={() => onCreateInDirectory(dir)}
+                        disabled={isCreating}
+                        testID={`new-chat-project-${p.id}`}
+                      >
+                        <Ionicons
+                          name={tracksChanges(p) ? "git-branch-outline" : "folder-outline"}
+                          size={18}
+                          color={isCurrent ? "#8b5cf6" : isDark ? "#888888" : "#666666"}
+                        />
+                        <View style={styles.projectRowContent}>
+                          <Text
+                            style={[styles.projectRowName, isDark && styles.textDark, isCurrent && styles.projectRowNameActive]}
+                            numberOfLines={1}
+                          >
+                            {projectName(p)}
+                          </Text>
+                          <Text style={[styles.projectRowPath, isDark && styles.metaDark]} numberOfLines={1}>
+                            {tracksChanges(p) ? dir : `${dir} · ${t("sessionsList.newSessionModal.noChangeTracking")}`}
+                          </Text>
+                        </View>
+                        {isCurrent && <Ionicons name="checkmark-circle" size={18} color="#8b5cf6" />}
+                      </TouchableOpacity>
+                    )
+                  })}
+                </>
+              )}
+
+              {/* Current directory, when it is not one of the projects above */}
+              {!projectDirs.has(currentDir ?? "") && (
+                <>
+                  <Text style={[styles.modalLabel, isDark && styles.metaDark, projects.length > 0 && { marginTop: 16 }]}>
+                    {t("sessionsList.newSessionModal.currentProjectLabel")}
+                  </Text>
+                  <TouchableOpacity
+                    style={[styles.modalDirBox, isDark && styles.modalDirBoxDark]}
+                    onPress={() => onCreateInDirectory()}
+                    disabled={isCreating}
+                  >
+                    <Ionicons name="folder" size={20} color={isDark ? "#8b5cf6" : "#6d28d9"} />
+                    <Text style={[styles.modalDirText, isDark && styles.textDark]} numberOfLines={2}>
+                      {currentDir || t("sessionsList.newSessionModal.serverDefault")}
+                    </Text>
+                    <Ionicons name="arrow-forward-circle" size={20} color={isDark ? "#8b5cf6" : "#6d28d9"} />
+                  </TouchableOpacity>
+                </>
+              )}
 
               {/* Recent projects */}
-              {recentDirectories.length > 0 && (
+              {recentDirectories.some((dir) => !projectDirs.has(dir)) && (
                 <>
                   <Text style={[styles.modalLabel, isDark && styles.metaDark, { marginTop: 16 }]}>
                     {t("sessionsList.newSessionModal.recentProjectsLabel")}
                   </Text>
-                  {recentDirectories.map((dir) => {
+                  {recentDirectories.filter((dir) => !projectDirs.has(dir)).map((dir) => {
                     const short = dir.split("/").filter(Boolean).pop() || dir
-                    const isCurrent =
-                      dir === (currentProject?.path?.absolute || activeConnection?.directory)
+                    const isCurrent = dir === currentDir
                     return (
                       <TouchableOpacity
                         key={dir}
@@ -684,45 +734,11 @@ export default function SessionsScreen() {
                 </>
               )}
 
-              {/* Server-known projects (excluding current) */}
-              {serverProjects.filter((p) => p.path?.absolute !== currentProject?.path?.absolute).length > 0 && (
-                <>
-                  <Text style={[styles.modalLabel, isDark && styles.metaDark, { marginTop: 16 }]}>
-                    {t("sessionsList.newSessionModal.serverProjectsLabel")}
-                  </Text>
-                  {serverProjects
-                    .filter((p) => p.path?.absolute !== currentProject?.path?.absolute)
-                    .map((p) => {
-                      const short = p.name || p.path?.absolute?.split("/").filter(Boolean).pop() || p.id
-                      return (
-                        <TouchableOpacity
-                          key={p.id}
-                          style={[styles.projectRow, isDark && styles.projectRowDark]}
-                          onPress={() => onCreateInDirectory(p.path?.absolute)}
-                          disabled={isCreating}
-                        >
-                          <Ionicons name="code-slash-outline" size={18} color={isDark ? "#888888" : "#666666"} />
-                          <View style={styles.projectRowContent}>
-                            <Text style={[styles.projectRowName, isDark && styles.textDark]} numberOfLines={1}>
-                              {short}
-                            </Text>
-                            {p.path?.absolute && (
-                              <Text style={[styles.projectRowPath, isDark && styles.metaDark]} numberOfLines={1}>
-                                {p.path.absolute}
-                              </Text>
-                            )}
-                          </View>
-                        </TouchableOpacity>
-                      )
-                    })}
-                </>
-              )}
-
               {/* Browse the server's filesystem instead of typing a path */}
               <TouchableOpacity
                 style={[styles.projectRow, isDark && styles.projectRowDark, { marginTop: 16 }]}
                 onPress={() =>
-                  openBrowser(currentProject?.path?.absolute || activeConnection?.directory || null, "create")
+                  openBrowser(projectDir(currentProject) || activeConnection?.directory || null, "create")
                 }
                 disabled={isCreating}
                 testID="browse-folders-button"
@@ -875,7 +891,7 @@ export default function SessionsScreen() {
         isDark={isDark}
         onSwitch={handleSwitchDirectory}
         onBrowse={() =>
-          openBrowser(activeConnection?.directory || currentProject?.path?.absolute || null, "switch")
+          openBrowser(activeConnection?.directory || projectDir(currentProject) || null, "switch")
         }
       />
 
