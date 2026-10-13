@@ -1,4 +1,6 @@
 export { MessageBubble } from "./MessageBubble"
+export { TurnBubble } from "./TurnBubble"
+export { WorkPane } from "./WorkPane"
 export { ToolCallCard } from "./ToolCallCard"
 export { DiffView, DiffRow } from "./DiffView"
 export { ReasoningBlock } from "./ReasoningBlock"
