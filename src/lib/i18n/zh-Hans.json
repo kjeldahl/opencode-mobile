@@ -451,5 +451,28 @@
     "action": "去获取",
     "dismiss": "暂不",
     "upToDate": "已是最新"
+  },
+  "changes": {
+    "title": "更改",
+    "tabs": {
+      "branch": "分支",
+      "git": "未提交",
+      "turn": "本轮"
+    },
+    "branchVs": "{{branch}} 对比 {{base}}",
+    "summary": "{{count}} 个文件",
+    "empty": {
+      "branch": "此分支没有更改。",
+      "defaultBranch": "当前在默认分支：请查看“未提交”。",
+      "git": "没有未提交的更改。",
+      "turn": "上一轮没有更改。"
+    },
+    "error": "无法加载更改：{{message}}",
+    "noPatch": "此文件没有可显示的差异（二进制或过大）。",
+    "status": {
+      "added": "新增",
+      "deleted": "删除",
+      "modified": "修改"
+    }
   }
 }

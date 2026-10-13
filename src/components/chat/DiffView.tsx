@@ -1,6 +1,6 @@
 import { View, Text, StyleSheet, Platform, ScrollView } from "react-native"
 import { WIDE_CONTENT_SCROLL_CONFIG } from "../../lib/scroll-config"
-import { computeDiff } from "./diff-compute"
+import { computeDiff, type DiffLine } from "./diff-compute"
 
 const mono = Platform.OS === "ios" ? "Menlo" : "monospace"
 
@@ -20,32 +20,43 @@ export function DiffView({ before, after, isDark }: Props) {
       <ScrollView {...WIDE_CONTENT_SCROLL_CONFIG} testID="diff-view-scroll">
         <View>
           {lines.map((line, idx) => (
-            <View
-              key={idx}
-              style={[
-                s.line,
-                line.type === "add" && (isDark ? s.addDark : s.add),
-                line.type === "remove" && (isDark ? s.removeDark : s.remove),
-              ]}
-            >
-              <Text style={[s.prefix, isDark && s.prefixDark]}>
-                {line.type === "add" ? "+" : line.type === "remove" ? "-" : " "}
-              </Text>
-              <Text
-                style={[
-                  s.text,
-                  isDark && s.textDark,
-                  line.type === "add" && s.addText,
-                  line.type === "remove" && s.removeText,
-                ]}
-                selectable
-              >
-                {line.text}
-              </Text>
-            </View>
+            <DiffRow key={idx} line={line} isDark={isDark} />
           ))}
         </View>
       </ScrollView>
+    </View>
+  )
+}
+
+// One diff line. `wrap` breaks long lines instead of relying on a horizontal
+// scroll (the fullscreen Changes view).
+export function DiffRow({ line, isDark, wrap }: { line: DiffLine; isDark: boolean; wrap?: boolean }) {
+  const hunk = line.type === "context" && line.text.startsWith("@@")
+  return (
+    <View
+      style={[
+        s.line,
+        line.type === "add" && (isDark ? s.addDark : s.add),
+        line.type === "remove" && (isDark ? s.removeDark : s.remove),
+        hunk && (isDark ? s.hunkDark : s.hunk),
+      ]}
+    >
+      <Text style={[s.prefix, isDark && s.prefixDark]}>
+        {line.type === "add" ? "+" : line.type === "remove" ? "-" : " "}
+      </Text>
+      <Text
+        style={[
+          s.text,
+          isDark && s.textDark,
+          line.type === "add" && s.addText,
+          line.type === "remove" && s.removeText,
+          hunk && s.hunkText,
+          wrap && s.wrap,
+        ]}
+        selectable
+      >
+        {line.text}
+      </Text>
     </View>
   )
 }
@@ -87,4 +98,8 @@ const s = StyleSheet.create({
   textDark: { color: "#e5e5e5" },
   addText: { color: "#16a34a" },
   removeText: { color: "#dc2626" },
+  hunk: { backgroundColor: "#eef2ff" },
+  hunkDark: { backgroundColor: "#1e1b4b" },
+  hunkText: { color: "#6366f1" },
+  wrap: { flex: 1 },
 })

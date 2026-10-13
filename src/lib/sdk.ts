@@ -75,6 +75,24 @@ export interface Message {
   finish?: string
 }
 
+// One file's change, as returned by /vcs/diff and /session/:id/diff.
+export interface FileDiff {
+  file: string
+  patch?: string
+  additions: number
+  deletions: number
+  status?: "added" | "deleted" | "modified"
+}
+
+// "git": working tree vs HEAD (uncommitted). "branch": working tree vs the
+// merge-base with the default branch (everything on this branch).
+export type VcsMode = "git" | "branch"
+
+export interface VcsInfo {
+  branch?: string
+  default_branch?: string
+}
+
 // API returns messages with parts embedded
 export interface MessageWithParts {
   info: Message
@@ -337,6 +355,16 @@ export function createClient(config: ClientConfig) {
       },
     },
 
+    // Version control state of this client's directory.
+    vcs: {
+      get: () => request<VcsInfo>(config, "/vcs"),
+      diff: (mode: VcsMode) => {
+        const query = new URLSearchParams({ mode })
+        if (config.directory) query.set("directory", config.directory)
+        return request<FileDiff[]>(config, `/vcs/diff?${query.toString()}`)
+      },
+    },
+
     path: {
       get: () =>
         request<{ home: string; state: string; config: string; worktree: string; directory: string }>(config, "/path"),
@@ -449,8 +477,8 @@ export function createClient(config: ClientConfig) {
       abort: (sessionID: string) => request<boolean>(config, `/session/${sessionID}/abort`, { method: "POST" }),
 
       diff: (sessionID: string, messageID?: string) => {
-        const qs = messageID ? `?messageID=${messageID}` : ""
-        return request<unknown[]>(config, `/session/${sessionID}/diff${qs}`)
+        const qs = messageID ? `?messageID=${encodeURIComponent(messageID)}` : ""
+        return request<FileDiff[]>(config, `/session/${sessionID}/diff${qs}`)
       },
 
       // Marks messageID (and everything after it) as pending revert. The

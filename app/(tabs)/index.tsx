@@ -23,6 +23,7 @@ import { useSessions } from "../../src/stores/sessions"
 import { useConnections } from "../../src/stores/connections"
 import { useEvents } from "../../src/stores/events"
 import { useCatalog } from "../../src/stores/catalog"
+import { useChanges, useHeadline } from "../../src/stores/changes"
 import type BottomSheet from "@gorhom/bottom-sheet"
 import type { Session, Project } from "../../src/lib/sdk"
 import { DirectorySwitcher, DirectoryBrowserSheet } from "../../src/components/chat"
@@ -72,6 +73,8 @@ function SessionItem({
     ])
   }
 
+  const changes = useHeadline(session.directory)
+
   // Extract short directory name from session
   const shortDir = session.directory ? session.directory.split("/").filter(Boolean).pop() : null
 
@@ -91,11 +94,11 @@ function SessionItem({
         <View style={styles.sessionMetaRow}>
           <Text style={[styles.sessionMeta, isDark && styles.metaDark]}>
             {formatTime(session.time.updated, t)}
-            {/* summary is always present but files defaults to 0 until the
-                server populates it — only show the count when it's meaningful,
-                matching the SessionInfo panel's `summary.files > 0` guard (#55) */}
-            {session.summary && session.summary.files > 0 &&
-              ` · ${t("sessionsList.filesCount", { count: session.summary.files })}`}
+            {/* Repo-level counts from the vcs diff (see stores/changes);
+                session.summary has been empty since opencode 1.15. */}
+            {changes && changes.files > 0 && ` · ${t("sessionsList.filesCount", { count: changes.files })} `}
+            {changes && changes.files > 0 && <Text style={styles.changesAdd}>+{changes.additions} </Text>}
+            {changes && changes.files > 0 && <Text style={styles.changesDel}>-{changes.deletions}</Text>}
           </Text>
           {shortDir && (
             <View style={styles.sessionDirBadge}>
@@ -260,16 +263,26 @@ export default function SessionsScreen() {
     }, [client, loadSessions, refreshProject]),
   )
 
+  // Change counts for the most recent repos in the list (stale entries only;
+  // pull-to-refresh forces).
+  const changeDirs = useMemo(
+    () => [...new Set(sessions.map((session) => session.directory).filter(Boolean))].slice(0, 10),
+    [sessions],
+  )
+  useEffect(() => {
+    if (client) void useChanges.getState().prefetch(changeDirs)
+  }, [client, changeDirs])
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true)
     try {
-      await Promise.all([loadSessions(), refreshProject()])
+      await Promise.all([loadSessions(), refreshProject(), useChanges.getState().prefetch(changeDirs, true)])
     } catch (err) {
       console.error("Refresh failed:", err)
     } finally {
       setRefreshing(false)
     }
-  }, [loadSessions, refreshProject])
+  }, [loadSessions, refreshProject, changeDirs])
 
   const handleRename = useCallback((session: Session) => {
     setRenameText(session.title || "")
@@ -990,6 +1003,8 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: "#666666",
   },
+  changesAdd: { color: "#16a34a", fontWeight: "600" },
+  changesDel: { color: "#dc2626", fontWeight: "600" },
   sessionMetaRow: {
     flexDirection: "row",
     alignItems: "center",

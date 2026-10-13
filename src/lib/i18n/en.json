@@ -451,5 +451,28 @@
     "action": "Get it",
     "dismiss": "Not now",
     "upToDate": "Up to date"
+  },
+  "changes": {
+    "title": "Changes",
+    "tabs": {
+      "branch": "Branch",
+      "git": "Uncommitted",
+      "turn": "This turn"
+    },
+    "branchVs": "{{branch}} vs {{base}}",
+    "summary": "{{count}} files",
+    "empty": {
+      "branch": "No changes on this branch.",
+      "defaultBranch": "On the default branch: see Uncommitted.",
+      "git": "No uncommitted changes.",
+      "turn": "No changes in the last turn."
+    },
+    "error": "Could not load changes: {{message}}",
+    "noPatch": "No diff available for this file (binary or too large).",
+    "status": {
+      "added": "added",
+      "deleted": "deleted",
+      "modified": "modified"
+    }
   }
 }

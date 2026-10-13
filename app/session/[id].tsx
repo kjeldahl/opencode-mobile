@@ -47,6 +47,7 @@ import { useSpeech } from "../../src/lib/speech"
 import { keyboardPadding, keyboardVerticalOffset } from "../../src/lib/keyboard-offset"
 import { composerMaxHeight } from "../../src/lib/session-layout"
 import { MessageNavigation } from "../../src/lib/message-navigation"
+import { useChanges, useHeadline, useOnTurnEnd } from "../../src/stores/changes"
 
 // --- Builtin slash commands ---
 const BUILTIN_COMMANDS: SlashCommand[] = [
@@ -174,6 +175,23 @@ export default function SessionScreen() {
   const questions = useEvents((s) => (sessionID ? s.questions[sessionID] : undefined)) || []
 
   const shortDir = getShortDir(currentSession?.directory)
+
+  // Branch/uncommitted change counts for this chat's repo; refreshed on focus
+  // and whenever the agent finishes a turn.
+  const changesDir = currentSession?.directory || directory
+  const changes = useHeadline(changesDir)
+  const refreshChanges = useCallback(
+    (force?: boolean) => {
+      if (changesDir) void useChanges.getState().prefetch([changesDir], force)
+    },
+    [changesDir],
+  )
+  useFocusEffect(useCallback(() => refreshChanges(), [refreshChanges]))
+  useOnTurnEnd(id, () => refreshChanges(true))
+  const openChanges = useCallback(() => {
+    if (!id) return
+    router.push({ pathname: "/changes/[id]", params: { id, directory: changesDir ?? "" } })
+  }, [id, changesDir, router])
   const [showScrollButton, setShowScrollButton] = useState(false)
 
   // SSE reconnect banner
@@ -663,6 +681,20 @@ export default function SessionScreen() {
                   <Text style={[s.dirText, isDark && s.dirTextDark]}>{shortDir}</Text>
                 </View>
               )}
+              <TouchableOpacity
+                style={[s.changesChip, isDark && s.dirBadgeDark]}
+                onPress={openChanges}
+                hitSlop={8}
+                testID="header-changes"
+              >
+                <Ionicons name="git-compare-outline" size={14} color={isDark ? "#888888" : "#666666"} />
+                {changes && changes.files > 0 && (
+                  <>
+                    <Text style={s.changesAdd}>+{changes.additions}</Text>
+                    <Text style={s.changesDel}>-{changes.deletions}</Text>
+                  </>
+                )}
+              </TouchableOpacity>
               <TouchableOpacity onPress={() => setShowInfo((v) => !v)} hitSlop={8}>
                 <Ionicons
                   name={showInfo ? "stats-chart" : "stats-chart-outline"}
@@ -714,6 +746,8 @@ export default function SessionScreen() {
             flatListRef.current?.scrollToEnd({ animated: true })
           }}
           onClose={() => setShowInfo(false)}
+          changes={changes}
+          onChangesPress={openChanges}
         />
 
         {/* SSE reconnect/connected banner */}
@@ -1171,6 +1205,17 @@ const s = StyleSheet.create({
     borderRadius: 6,
   },
   dirBadgeDark: { backgroundColor: "#1a1a1a" },
+  changesChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#f5f5f5",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  changesAdd: { fontSize: 12, fontWeight: "600", color: "#16a34a" },
+  changesDel: { fontSize: 12, fontWeight: "600", color: "#dc2626" },
   dirText: { fontSize: 12, color: "#666666", fontWeight: "500" },
   dirTextDark: { color: "#888888" },
 

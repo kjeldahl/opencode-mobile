@@ -1,6 +1,6 @@
 export { MessageBubble } from "./MessageBubble"
 export { ToolCallCard } from "./ToolCallCard"
-export { DiffView } from "./DiffView"
+export { DiffView, DiffRow } from "./DiffView"
 export { ReasoningBlock } from "./ReasoningBlock"
 export { PermissionPrompt } from "./PermissionPrompt"
 export { QuestionPrompt } from "./QuestionPrompt"
