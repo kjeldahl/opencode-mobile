@@ -89,20 +89,35 @@ jobs:
         run: npx expo prebuild --platform android --no-install
 
       - name: Setup signing
+        # Every build (main pushes and v* tags alike) is signed with the one release keystore from the
+        # repo secrets, so each APK installs over the previous one and keeps the app's data. Without
+        # the secrets the build falls back to a throwaway key and warns: that APK cannot update an
+        # installed build. Secrets go through env, not ${{ }} in the script text.
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          if [[ "${{ github.ref }}" == refs/tags/v* && -n "${{ secrets.KEYSTORE_BASE64 }}" ]]; then
-            echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > android/app/release.keystore
-            echo "RELEASE_STORE_FILE=release.keystore" >> "$GITHUB_ENV"
-            echo "RELEASE_STORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }}" >> "$GITHUB_ENV"
-            echo "RELEASE_KEY_ALIAS=${{ secrets.KEY_ALIAS }}" >> "$GITHUB_ENV"
-            echo "RELEASE_KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}" >> "$GITHUB_ENV"
-            echo "Signing: production keystore"
+          if [[ -n "$KEYSTORE_BASE64" ]]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > android/app/release.keystore
+            {
+              echo "RELEASE_STORE_FILE=release.keystore"
+              echo "RELEASE_STORE_PASSWORD=$KEYSTORE_PASSWORD"
+              echo "RELEASE_KEY_ALIAS=$KEY_ALIAS"
+              echo "RELEASE_KEY_PASSWORD=$KEY_PASSWORD"
+            } >> "$GITHUB_ENV"
+            echo "Signing: release keystore"
           else
             keytool -genkey -v -keystore android/app/debug.keystore -storepass android \
               -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 \
               -dname "CN=Android Debug,O=Android,C=US"
-            echo "Signing: debug keystore (non-release build)"
+            echo "::warning title=Throwaway signing key::KEYSTORE_BASE64 is not set, so this APK is signed with a one-off key and will not install over an earlier build. See issue #1."
           fi
+
+      - name: Check release signing
+        if: env.RELEASE_STORE_FILE != ''
+        run: keytool -list -keystore android/app/release.keystore -storepass "$RELEASE_STORE_PASSWORD" -alias "$RELEASE_KEY_ALIAS" > /dev/null
 
       - name: Build APK
         working-directory: android
