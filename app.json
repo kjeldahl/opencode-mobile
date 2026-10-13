@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "OpenCode",
+    "name": "OpenCode forge",
     "slug": "opencode-mobile",
     "version": "0.4.15",
     "orientation": "portrait",
@@ -34,7 +34,7 @@
       }
     },
     "android": {
-      "package": "cc.agentlabs.opencode",
+      "package": "it.kjeldahl.opencode",
       "versionCode": 42,
       "usesCleartextTraffic": true,
       "adaptiveIcon": {
