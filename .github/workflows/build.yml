@@ -62,9 +62,12 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v4
 
-      # Replaces actions/cache: saves a fresh cache from main (PRs only read it) and keeps the Gradle
-      # build cache, so unchanged library modules are not recompiled.
+      # Replaces actions/cache and keeps the Gradle build cache, so unchanged library modules are not
+      # recompiled. Saved from PRs too (default is main only): a PR's next push starts warm instead of
+      # re-resolving every dependency (~2.5 min) until main has a cache.
       - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: false
 
       - name: Install dependencies
         run: npm install --legacy-peer-deps
@@ -145,6 +148,8 @@ jobs:
         uses: android-actions/setup-android@v4
 
       - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: false
 
       - name: Install dependencies
         run: npm install --legacy-peer-deps
