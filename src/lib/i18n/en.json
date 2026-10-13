@@ -415,6 +415,30 @@
         "hoursAgo": "{{count}}h ago",
         "daysAgo": "{{count}}d ago"
       }
+    },
+    "prButton": {
+      "labels": {
+        "create": "Create PR",
+        "creating": "Creating…",
+        "checking": "Checking…",
+        "watching": "Fixing…",
+        "merging": "Merging…",
+        "merged": "Merged",
+        "closed": "Closed",
+        "pending": "Running",
+        "passing": "Passed",
+        "failing": "Failed",
+        "none": "No checks",
+        "unknown": "Open"
+      },
+      "menu": {
+        "openGithub": "View on GitHub",
+        "refresh": "Refresh status",
+        "watch": "Watch & fix checks",
+        "merge": "Merge PR",
+        "create": "Create PR",
+        "confirmMerge": "Tap again to merge #{{number}}"
+      }
     }
   },
   "demo": {
