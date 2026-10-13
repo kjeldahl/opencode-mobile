@@ -33,40 +33,29 @@ name: Activation E2E (Maestro)
 # devices against a real server, so asserting on it here would be asserting
 # on the harness rather than the app.
 
+# Manual only: run build.yml from the Actions tab (workflow_dispatch, "Run the Maestro E2E flows").
+# Its build job makes an arm64-v8a + x86_64 APK and this workflow installs that artifact instead
+# of running a second Gradle build.
 on:
-  push:
-    branches: [main]
-    paths:
-      - "app/**"
-      - "src/**"
-      - "tests/fixtures/**"
-      - ".maestro/**"
-      - ".github/workflows/activation-e2e.yml"
-  pull_request:
-    branches: [main]
-    paths:
-      - "app/**"
-      - "src/**"
-      - "tests/fixtures/**"
-      - ".maestro/**"
-      - ".github/workflows/activation-e2e.yml"
-  workflow_dispatch: {}
+  workflow_call:
+    inputs:
+      apk-artifact:
+        description: Name of the APK artifact uploaded earlier in the calling run
+        type: string
+        default: app-release
 
 jobs:
   activation-e2e:
     runs-on: ubuntu-latest
-    # Same npm install + expo prebuild + assembleRelease + emulator pipeline as
-    # cua-smoke.yml, which budgets 60 min (emulator-boot-timeout alone is 10 min).
-    # Typical runs finish well under this; the ceiling just avoids flaky kills
-    # on cold Gradle caches.
-    timeout-minutes: 60
+    # emulator-boot-timeout alone is 10 min; no Gradle build here any more.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6
 
       - uses: actions/setup-node@v6
         with:
+          # Runs the dependency-free mock server (TypeScript, natively); no npm install.
           node-version: 24
-          cache: npm
 
       - uses: actions/setup-java@v5
         with:
@@ -85,39 +74,17 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      - name: Cache Gradle
-        uses: actions/cache@v5
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-            android/.gradle
-          key: ${{ runner.os }}-gradle-${{ hashFiles('android/**/*.gradle*', 'android/gradle/wrapper/gradle-wrapper.properties') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
-
-      - name: Purge stale generated sources
-        # Same mitigation as cua-smoke.yml (whose Gradle cache entries this job
-        # shares — the cache key/restore-keys are identical): the restore-keys
-        # prefix fallback can restore a generated autolinking tree from a
-        # previous package id, making compileReleaseJavaWithJavac fail against
-        # the old package (ai.opencode.mobile vs cc.agentlabs.opencode). Delete
-        # generated sources so prebuild + Gradle regenerate them.
-        run: rm -rf android/app/build/generated android/build/generated android/app/build/intermediates
-
       - name: Install Maestro CLI
         run: |
           curl -Ls "https://get.maestro.mobile.dev" | bash
           echo "$HOME/.maestro/bin" >> $GITHUB_PATH
 
-      - name: Install dependencies & build APK
-        env:
-          SENTRY_DISABLE_AUTO_UPLOAD: "true"
-        run: |
-          npm install --legacy-peer-deps
-          npx expo prebuild --platform android --no-install
-          keytool -genkey -v -keystore android/app/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
-          cd android && ./gradlew assembleRelease
+      - name: Download APK
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ inputs.apk-artifact }}
+          # Where scripts/run-e2e-flows.sh looks for it.
+          path: android/app/build/outputs/apk/release
 
       - name: Start mock opencode servers
         run: |
