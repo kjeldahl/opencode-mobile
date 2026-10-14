@@ -185,6 +185,7 @@ export default function SessionsScreen() {
     addRecentDirectory,
     recentDirectories,
   } = useConnections()
+  const workspace = useConnections((s) => s.workspace)
   const authError = useEvents((s) => s.authError)
   const reconnect = useEvents((s) => s.connect)
   const loadCatalog = useCatalog((s) => s.load)
@@ -491,6 +492,37 @@ export default function SessionsScreen() {
             {t("sessionsList.empty.tryDemoButton")}
           </Text>
         </TouchableOpacity>
+      </View>
+    )
+  }
+
+  // forge puts idle workspaces to sleep and wakes them on the next request
+  // (~10-15s). That is not an error — say so, and say how long, instead of
+  // showing a connection that looks broken (issue #10).
+  if (workspace) {
+    const stopped = workspace.state === "off"
+    return (
+      <View style={[styles.emptyContainer, isDark && styles.containerDark]}>
+        <Ionicons name={stopped ? "stop-circle-outline" : "hourglass-outline"} size={64} color={isDark ? "#444444" : "#cccccc"} />
+        <Text style={[styles.emptyTitle, isDark && styles.textDark]}>
+          {t(stopped ? "sessionsList.empty.workspaceStoppedTitle" : "sessionsList.empty.workspaceWakingTitle")}
+        </Text>
+        <Text style={[styles.emptySubtitle, isDark && styles.metaDark]}>
+          {stopped
+            ? t("sessionsList.empty.workspaceStoppedSubtitle")
+            : t("sessionsList.empty.workspaceWakingSubtitle", {
+                seconds: Math.max(1, Math.round(workspace.wakeSeconds ?? 15)),
+              })}
+        </Text>
+        {!stopped && (
+          <TouchableOpacity
+            style={[styles.addButton, isDark && styles.addButtonDark]}
+            onPress={() => reconnect()}
+            testID="workspace-waking-retry"
+          >
+            <Text style={[styles.addButtonText, isDark && styles.addButtonTextDark]}>{t("common.retry")}</Text>
+          </TouchableOpacity>
+        )}
       </View>
     )
   }
