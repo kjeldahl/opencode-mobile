@@ -21,6 +21,16 @@ test("wide-content scroll config shows the horizontal scroll indicator", () => {
   assert.equal(WIDE_CONTENT_SCROLL_CONFIG.showsHorizontalScrollIndicator, true)
 })
 
+test("wide-content scroll config enables nested scrolling", () => {
+  // GitHub issue #14: inside the vertical chat FlatList, the child horizontal
+  // ScrollView must opt into nested scrolling, otherwise the parent swallows
+  // the touch and scrolls the chat vertically instead of the wide content.
+  assert.equal(WIDE_CONTENT_SCROLL_CONFIG.nestedScrollEnabled, true)
+})
+
 test("wide-content scroll config has no unexpected keys", () => {
-  assert.deepEqual(Object.keys(WIDE_CONTENT_SCROLL_CONFIG).sort(), ["horizontal", "showsHorizontalScrollIndicator"])
+  assert.deepEqual(
+    Object.keys(WIDE_CONTENT_SCROLL_CONFIG).sort(),
+    ["horizontal", "nestedScrollEnabled", "showsHorizontalScrollIndicator"],
+  )
 })
