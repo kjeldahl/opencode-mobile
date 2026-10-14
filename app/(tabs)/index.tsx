@@ -32,6 +32,7 @@ import { UpdateBanner } from "../../src/components/UpdateBanner"
 import { nameOf } from "../../src/lib/path-utils"
 import { newChatDir, newChatProjects, projectDir, projectName, tracksChanges } from "../../src/lib/projects"
 import { SETUP_GUIDE_URL } from "../../src/lib/links"
+import { connectionBanner } from "../../src/lib/connection-status"
 
 function formatTime(timestamp: number, t: (key: string, opts?: Record<string, unknown>) => string): string {
   const date = new Date(timestamp)
@@ -185,7 +186,9 @@ export default function SessionsScreen() {
     addRecentDirectory,
     recentDirectories,
   } = useConnections()
+  const workspace = useConnections((s) => s.workspace)
   const authError = useEvents((s) => s.authError)
+  const reconnectAttempts = useEvents((s) => s.reconnectAttempts)
   const reconnect = useEvents((s) => s.connect)
   const loadCatalog = useCatalog((s) => s.load)
   const dirSheetRef = useRef<BottomSheet>(null)
@@ -198,6 +201,22 @@ export default function SessionsScreen() {
   // Directories collapsed in the grouped session list. Empty by default —
   // all groups start expanded (#67).
   const [collapsedDirs, setCollapsedDirs] = useState<Set<string>>(new Set())
+  // forge gives an estimate (`wake_seconds`), so the waking screen counts down
+  // from it and keeps spinning past zero rather than freezing on "15 seconds"
+  // for a workspace that is taking longer (issue #10).
+  const [wakeLeft, setWakeLeft] = useState<number | null>(null)
+
+  useEffect(() => {
+    if (!workspace || workspace.state === "off") {
+      setWakeLeft(null)
+      return
+    }
+    const seconds = Math.max(1, Math.round(workspace.wakeSeconds ?? 15))
+    const until = Date.now() + seconds * 1000
+    setWakeLeft(seconds)
+    const tick = setInterval(() => setWakeLeft(Math.max(0, Math.round((until - Date.now()) / 1000))), 500)
+    return () => clearInterval(tick)
+  }, [workspace?.state, workspace?.wakeSeconds])
 
   const toggleGroup = useCallback((directory: string) => {
     setCollapsedDirs((prev) => {
@@ -495,6 +514,50 @@ export default function SessionsScreen() {
     )
   }
 
+  // forge puts idle workspaces to sleep and wakes them on the next request
+  // (~10-15s). That is not an error — say so, and say how long, instead of
+  // showing a connection that looks broken (issue #10). A wake outranks a
+  // retry: if the stream is down because the workspace is booting, "attempt 3"
+  // is the wrong thing to say. An already-populated list keeps its rows and
+  // gets the banner above it; an empty one is the screen.
+  const banner = connectionBanner(workspace, reconnectAttempts)
+  const bannerMessage =
+    banner.kind === "stopped"
+      ? t("sessionsList.empty.workspaceStoppedSubtitle")
+      : banner.kind === "waking"
+        ? wakeLeft !== null && wakeLeft > 0
+          ? t("sessionsList.empty.workspaceWakingCountdown", { seconds: wakeLeft })
+          : t("sessionsList.empty.workspaceWakingOvertime")
+        : banner.kind === "retrying"
+          ? t("session.banners.reconnecting", { attempt: banner.attempt })
+          : ""
+
+  if (workspace && sessions.length === 0) {
+    const stopped = workspace.state === "off"
+    return (
+      <View style={[styles.emptyContainer, isDark && styles.containerDark]}>
+        {stopped ? (
+          <Ionicons name="stop-circle-outline" size={64} color={isDark ? "#444444" : "#cccccc"} />
+        ) : (
+          <ActivityIndicator size="large" color={isDark ? "#ffffff" : "#0a0a0a"} />
+        )}
+        <Text style={[styles.emptyTitle, isDark && styles.textDark]}>
+          {t(stopped ? "sessionsList.empty.workspaceStoppedTitle" : "sessionsList.empty.workspaceWakingTitle")}
+        </Text>
+        <Text style={[styles.emptySubtitle, isDark && styles.metaDark]}>{bannerMessage}</Text>
+        {!stopped && (
+          <TouchableOpacity
+            style={[styles.addButton, isDark && styles.addButtonDark]}
+            onPress={() => reconnect()}
+            testID="workspace-waking-retry"
+          >
+            <Text style={[styles.addButtonText, isDark && styles.addButtonTextDark]}>{t("common.retry")}</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    )
+  }
+
   // The SSE loop stopped retrying because the server rejected our
   // credentials (401/403) — no amount of pull-to-refresh fixes that, so
   // point the user straight at the fix instead of a spinner that never
@@ -566,6 +629,13 @@ export default function SessionsScreen() {
       {error && (
         <View style={styles.errorBar}>
           <Text style={styles.errorText}>{error}</Text>
+        </View>
+      )}
+
+      {banner.kind !== "none" && (
+        <View style={styles.wakeBar} testID="connection-banner">
+          <ActivityIndicator size="small" color={isDark ? "#9ca3af" : "#6b7280"} />
+          <Text style={[styles.wakeText, isDark && styles.wakeTextDark]}>{bannerMessage}</Text>
         </View>
       )}
 
@@ -962,6 +1032,23 @@ const styles = StyleSheet.create({
   errorText: {
     color: "#dc2626",
     fontSize: 14,
+  },
+  wakeBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#eff6ff",
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#dbeafe",
+  },
+  wakeText: {
+    color: "#1d4ed8",
+    fontSize: 14,
+    flex: 1,
+  },
+  wakeTextDark: {
+    color: "#93c5fd",
   },
   groupHeader: {
     flexDirection: "row",

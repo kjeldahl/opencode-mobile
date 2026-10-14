@@ -7,6 +7,7 @@ import { addBreadcrumb } from "../lib/sentry"
 import { AnalyticsEvent, classifyConnectionError, track, type ConnectionTestSource } from "../lib/analytics"
 import { buildAuth } from "../lib/auth"
 import { stripTrailingSlash } from "../lib/path-utils"
+import { untilAwake, isWorkspaceWakingError, type ForgeState } from "../lib/forge"
 
 const CONNECTIONS_KEY = "opencode_connections"
 const PASSWORDS_PREFIX = "opencode_password_"
@@ -25,6 +26,46 @@ interface ClientBase {
   auth?: { username: string; password: string }
 }
 
+// A forge workspace that answers 503 + X-Forge-State. `waking` is a state the
+// UI can act on (countdown, spinner) rather than an error; `stopped` asks for
+// the hub because no request will ever wake it.
+interface WorkspaceStatus {
+  state: ForgeState
+  wakeSeconds?: number
+}
+
+// Shared probe of a connection's server: which project is active, and what the
+// server's own paths are. While forge is waking the workspace it keeps the
+// connection usable and reports progress instead of failing, and once awake
+// the results land in the store like they always did.
+async function loadServerMeta(client: Client, set: (patch: Partial<ConnectionsState>) => void) {
+  const probe = () =>
+    Promise.all([
+      client.project.current().catch((error) => {
+        if (isWorkspaceWakingError(error)) throw error
+        return null
+      }),
+      client.path.get().catch((error) => {
+        if (isWorkspaceWakingError(error)) throw error
+        return null
+      }),
+    ])
+
+  try {
+    const [project, paths] = await untilAwake(probe, {
+      sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+      onState: (info) => set({ workspace: { state: info.state, wakeSeconds: info.wakeSeconds } }),
+    })
+    set({ currentProject: project, serverHome: paths?.home || null, workspace: null })
+  } catch (error) {
+    // A stopped/off workspace never recovers on a request, and a timeout on a
+    // plain server is just an unreachable server — either way there is nothing
+    // to show but the state itself, so the SSE reconnect loop keeps trying.
+    const workspace = isWorkspaceWakingError(error) ? { state: error.state, wakeSeconds: error.wakeSeconds } : null
+    set({ currentProject: null, serverHome: null, workspace })
+  }
+}
+
 interface ConnectionsState {
   connections: ServerConnection[]
   activeConnection: ServerConnection | null
@@ -32,6 +73,9 @@ interface ConnectionsState {
   clientBase: ClientBase | null
   currentProject: Project | null
   serverHome: string | null // Home directory on the server machine (for ~ expansion)
+  // Forge workspace that is starting up (or stopped) behind the active
+  // connection. null means "no special state" — a plain server, or awake.
+  workspace: WorkspaceStatus | null
   recentDirectories: string[]
   isLoading: boolean
   error: string | null
@@ -81,6 +125,7 @@ export const useConnections = create<ConnectionsState>((set, get) => ({
   clientBase: null,
   serverHome: null,
   currentProject: null,
+  workspace: null,
   recentDirectories: [],
   isLoading: true,
   error: null,
@@ -101,25 +146,12 @@ export const useConnections = create<ConnectionsState>((set, get) => ({
       // Create client for active connection
       let client: Client | null = null
       let base: ClientBase | null = null
-      let project: Project | null = null
-      let home: string | null = null
       if (active) {
         const password = await SecureStore.getItemAsync(`${PASSWORDS_PREFIX}${active.id}`)
         const auth = buildAuth(active.username, password)
         const built = buildClient(active.url, active.directory, auth)
         client = built.client
         base = built.base
-        // Fetch current project info and server paths
-        try {
-          const [proj, paths] = await Promise.all([
-            client.project.current().catch(() => null),
-            client.path.get().catch(() => null),
-          ])
-          project = proj
-          home = paths?.home || null
-        } catch {
-          // Server might be offline
-        }
       }
 
       set({
@@ -127,11 +159,17 @@ export const useConnections = create<ConnectionsState>((set, get) => ({
         activeConnection: active,
         client,
         clientBase: base,
-        currentProject: project,
-        serverHome: home,
+        currentProject: null,
+        serverHome: null,
+        workspace: null,
         recentDirectories,
         isLoading: false,
       })
+
+      // The project and the server paths come last, so a workspace that is
+      // still starting is reported (and retried) instead of leaving the app
+      // staring at a connection that looks dead (issue #10).
+      if (client) await loadServerMeta(client, set)
     } catch (error) {
       set({ error: "Failed to load connections", isLoading: false })
     }
@@ -159,9 +197,6 @@ export const useConnections = create<ConnectionsState>((set, get) => ({
     let base = get().clientBase
     let activeConnection = get().activeConnection
 
-    let project = get().currentProject
-    let serverHome = get().serverHome
-
     if (newConnection.active) {
       activeConnection = newConnection
       const auth = buildAuth(newConnection.username, password)
@@ -169,21 +204,16 @@ export const useConnections = create<ConnectionsState>((set, get) => ({
       client = built.client
       base = built.base
 
-      // Fetch server metadata so loadSessions can use clientForDirectory(serverHome)
-      // immediately after the connection is added (same as setActiveConnection does).
-      try {
-        const [proj, paths] = await Promise.all([
-          client.project.current().catch(() => null),
-          client.path.get().catch(() => null),
-        ])
-        project = proj
-        serverHome = paths?.home || null
-      } catch {
-        // Server might be unreachable; proceed without metadata
-      }
+      set({ connections, activeConnection, client, clientBase: base, currentProject: null, serverHome: null, workspace: null })
+
+      // Server metadata, retried while forge is waking, so loadSessions can
+      // use clientForDirectory(serverHome) right after the connection is added
+      // (same as setActiveConnection does).
+      await loadServerMeta(client, set)
+      return id
     }
 
-    set({ connections, activeConnection, client, clientBase: base, currentProject: project, serverHome })
+    set({ connections, activeConnection, client, clientBase: base })
     return id
   },
 
@@ -225,8 +255,6 @@ export const useConnections = create<ConnectionsState>((set, get) => ({
     const active = connections.find((c) => c.id === id) || null
     let client: Client | null = null
     let base: ClientBase | null = null
-    let project: Project | null = null
-    let home: string | null = null
 
     if (active) {
       const password = await SecureStore.getItemAsync(`${PASSWORDS_PREFIX}${active.id}`)
@@ -235,27 +263,21 @@ export const useConnections = create<ConnectionsState>((set, get) => ({
       client = built.client
       base = built.base
 
-      try {
-        const [proj, paths] = await Promise.all([
-          client.project.current().catch(() => null),
-          client.path.get().catch(() => null),
-        ])
-        project = proj
-        home = paths?.home || null
-      } catch {
-        // Server might be offline
-      }
-
       // Update last connected time
       active.lastConnected = Date.now()
       await SecureStore.setItemAsync(CONNECTIONS_KEY, JSON.stringify(connections))
     }
 
-    set({ connections, activeConnection: active, client, clientBase: base, currentProject: project, serverHome: home })
+    // The selection is made as soon as the client exists — a workspace that
+    // answers 503 while starting must not block switching (issue #10). The
+    // probe runs after, reporting what it sees into `workspace`.
+    set({ connections, activeConnection: active, client, clientBase: base, currentProject: null, serverHome: null, workspace: null })
+
+    if (client) void loadServerMeta(client, set)
     addBreadcrumb({
       category: "connection",
       message: active ? `active connection set: ${active.type}` : "active connection cleared",
-      data: { id: active?.id, type: active?.type, hasProject: Boolean(project) },
+      data: { id: active?.id, type: active?.type },
     })
   },
 
@@ -297,28 +319,16 @@ export const useConnections = create<ConnectionsState>((set, get) => ({
       const password = await SecureStore.getItemAsync(`${PASSWORDS_PREFIX}${id}`)
       const auth = buildAuth(active.username, password)
       const built = buildClient(active.url, active.directory, auth)
-      try {
-        const [project, paths] = await Promise.all([
-          built.client.project.current().catch(() => null),
-          built.client.path.get().catch(() => null),
-        ])
-        set({
-          connections,
-          activeConnection: active,
-          client: built.client,
-          clientBase: built.base,
-          currentProject: project,
-          serverHome: paths?.home || null,
-        })
-      } catch {
-        set({
-          connections,
-          activeConnection: active,
-          client: built.client,
-          clientBase: built.base,
-          currentProject: null,
-        })
-      }
+      set({
+        connections,
+        activeConnection: active,
+        client: built.client,
+        clientBase: built.base,
+        currentProject: null,
+        serverHome: null,
+        workspace: null,
+      })
+      await loadServerMeta(built.client, set)
     } else {
       set({ connections })
     }
@@ -330,7 +340,7 @@ export const useConnections = create<ConnectionsState>((set, get) => ({
 
     try {
       const project = await client.project.current()
-      set({ currentProject: project })
+      set({ currentProject: project, workspace: null })
     } catch {
       set({ currentProject: null })
     }

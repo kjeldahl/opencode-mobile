@@ -8,6 +8,7 @@ import { addBreadcrumb } from "../lib/sentry"
 import { AnalyticsEvent, track } from "../lib/analytics"
 import { recordSuccessfulSession } from "../lib/store-review"
 import { isAuthError } from "../lib/api-error"
+import { isWorkspaceWakingError } from "../lib/forge"
 import { isSessionActuallyIdle } from "../lib/session-status-reconcile"
 import type { Client, Part, Session, Message } from "../lib/sdk"
 
@@ -196,7 +197,17 @@ export const useEvents = create<EventsState>((set, get) => ({
         const disconnectedFor = Date.now() - lastDisconnectAt
         set({ connected: false, reconnectAttempts, lastDisconnectAt })
 
-        if (disconnectedFor >= PROLONGED_DISCONNECT_MS) {
+        // A workspace that is starting or stopped is not a lost connection —
+        // the banner in the sessions list says what is happening, and forge
+        // tells us how long to wait (X-Forge-State + Retry-After), so no
+        // "Connection interrupted" push (issue #10).
+        const waking = isWorkspaceWakingError(reason) ? reason : null
+        if (waking) {
+          useConnections.setState({ workspace: { state: waking.state, wakeSeconds: waking.wakeSeconds } })
+        } else if (useConnections.getState().workspace) {
+          useConnections.setState({ workspace: null })
+        }
+        if (!waking && disconnectedFor >= PROLONGED_DISCONNECT_MS) {
           notify({
             category: "connection",
             title: "Connection interrupted",
@@ -207,8 +218,8 @@ export const useEvents = create<EventsState>((set, get) => ({
           })
         }
 
-        const baseDelay = RECONNECT_DELAYS_MS[Math.min(reconnectAttempts - 1, RECONNECT_DELAYS_MS.length - 1)]
-        const jitteredDelay = Math.min(15_000, Math.round(baseDelay * (0.75 + Math.random() * 0.5)))
+        const baseDelay = waking ? waking.retryAfterMs : RECONNECT_DELAYS_MS[Math.min(reconnectAttempts - 1, RECONNECT_DELAYS_MS.length - 1)]
+        const jitteredDelay = waking ? baseDelay : Math.min(15_000, Math.round(baseDelay * (0.75 + Math.random() * 0.5)))
         console.warn(`[SSE] Connection lost, reconnecting in ${jitteredDelay}ms:`, reason)
         addBreadcrumb({
           category: "sse",
@@ -233,6 +244,9 @@ export const useEvents = create<EventsState>((set, get) => ({
             resyncedAfterReconnect = true
             void resyncBusySessions()
           }
+
+          // Live data proves the workspace answered — drop the waking banner.
+          if (useConnections.getState().workspace) useConnections.setState({ workspace: null })
 
           const payload = (event as any).payload || event
           const type = payload.type as string

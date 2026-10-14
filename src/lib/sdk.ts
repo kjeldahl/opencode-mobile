@@ -6,10 +6,12 @@ import { fetch as expoFetch } from "expo/fetch"
 import { buildRequestHeaders } from "./headers"
 import { SSEParser } from "./sse"
 import { apiErrorFor } from "./api-error"
+import { parseForgeState } from "./forge"
 import { loadSessionList } from "./session-list"
 import type { FileRoot } from "./file-roots"
 
 export { ApiAuthError, isAuthError } from "./api-error"
+export { WorkspaceWakingError, isWorkspaceWakingError } from "./forge"
 
 export interface ClientConfig {
   baseUrl: string
@@ -235,12 +237,17 @@ async function request<T>(
     timeoutMs,
   )
 
-  if (!response.ok) {
-    const error = await response.text()
-    throw apiErrorFor(response.status, `API Error: ${response.status} - ${error}`)
-  }
+  if (!response.ok) throw await errorFor(response, "API Error")
 
   return response.json()
+}
+
+// Error for a failed response. A 503 that forge-front marked with
+// X-Forge-State is a workspace starting or stopped, not a server failure, so
+// it becomes a typed error the caller can act on (see ./forge, issue #10).
+async function errorFor(response: Response, prefix: string): Promise<Error> {
+  const body = await response.text()
+  return parseForgeState(response.status, response.headers, body) ?? apiErrorFor(response.status, `${prefix}: ${response.status} - ${body}`)
 }
 
 async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs: number = REQUEST_TIMEOUT_MS): Promise<Response> {
@@ -294,6 +301,11 @@ export function createClient(config: ClientConfig) {
         // Must use expo/fetch for ReadableStream support on native
         const response = await expoFetch(url, { headers, signal })
         if (!response.ok || !response.body) {
+          // A sleeping workspace answers the stream with 503 + X-Forge-State
+          // and does NOT wake on it — the typed error lets the reconnect loop
+          // wait out Retry-After instead of reporting a connection failure.
+          const waking = parseForgeState(response.status, response.headers, "")
+          if (waking) throw waking
           throw apiErrorFor(response.status, `Failed to connect to event stream: ${response.status}`)
         }
 
@@ -399,10 +411,7 @@ export function createClient(config: ClientConfig) {
               })
               // Older servers lack this route — signal fallback to legacy /session.
               if (response.status === 404) return null
-              if (!response.ok) {
-                const body = await response.text()
-                throw apiErrorFor(response.status, `API Error: ${response.status} - ${body}`)
-              }
+              if (!response.ok) throw await errorFor(response, "API Error")
               return response.json()
             },
             getLegacy: (query) => request<Session[]>(config, `/session${query}`),
@@ -453,10 +462,7 @@ export function createClient(config: ClientConfig) {
           body,
         })
 
-        if (!response.ok) {
-          const error = await response.text()
-          throw new Error(`Failed to send message: ${response.status} - ${error}`)
-        }
+        if (!response.ok) throw await errorFor(response, "Failed to send message")
       },
 
       command: async (
@@ -479,10 +485,7 @@ export function createClient(config: ClientConfig) {
           body: JSON.stringify({ ...params, sessionID }),
         })
 
-        if (!response.ok) {
-          const error = await response.text()
-          throw new Error(`Failed to run command: ${response.status} - ${error}`)
-        }
+        if (!response.ok) throw await errorFor(response, "Failed to run command")
       },
 
       abort: (sessionID: string) => request<boolean>(config, `/session/${sessionID}/abort`, { method: "POST" }),

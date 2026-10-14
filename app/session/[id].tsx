@@ -42,6 +42,7 @@ import {
 import { useSessions } from "../../src/stores/sessions"
 import { useEvents, refreshPending } from "../../src/stores/events"
 import { useConnections } from "../../src/stores/connections"
+import { connectionBanner } from "../../src/lib/connection-status"
 import { buildRows } from "../../src/lib/turns"
 import { useAuth } from "../../src/stores/auth"
 import { useCatalog } from "../../src/stores/catalog"
@@ -211,6 +212,8 @@ export default function SessionScreen() {
 
   // SSE reconnect banner
   const reconnectAttempts = useEvents((s) => s.reconnectAttempts)
+  const workspace = useConnections((s) => s.workspace)
+  const banner = connectionBanner(workspace, reconnectAttempts)
   const [showConnectedFlash, setShowConnectedFlash] = useState(false)
   const prevReconnecting = useRef(false)
 
@@ -733,10 +736,21 @@ export default function SessionScreen() {
           onChangesPress={openChanges}
         />
 
-        {/* SSE reconnect/connected banner */}
-        {reconnectAttempts > 0 && (
+        {/* The same drop can mean two different things — say which one. A
+            workspace that is starting is not a network retry, and "attempt 3"
+            while forge boots the sandbox is just noise (issue #10). */}
+        {banner.kind === "retrying" && (
           <View style={[s.banner, s.bannerReconnecting]}>
-            <Text style={s.bannerText}>{t("session.banners.reconnecting", { attempt: reconnectAttempts })}</Text>
+            <Text style={s.bannerText}>{t("session.banners.reconnecting", { attempt: banner.attempt })}</Text>
+          </View>
+        )}
+        {(banner.kind === "waking" || banner.kind === "stopped") && (
+          <View style={[s.banner, s.bannerReconnecting]}>
+            <Text style={s.bannerText}>
+              {t(banner.kind === "stopped" ? "session.banners.workspaceStopped" : "session.banners.workspaceWaking", {
+                seconds: banner.seconds,
+              })}
+            </Text>
           </View>
         )}
         {showConnectedFlash && reconnectAttempts === 0 && (
