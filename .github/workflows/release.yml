@@ -1,0 +1,151 @@
+name: Release
+
+# Cut a release: bump the version, write its changelog, commit, and push a v* tag.
+# A tag is what actually ships — it is what build.yml turns into a GitHub Release
+# (with the APK) and what publish-play-store.yml / publish-fdroid.yml publish.
+#
+# Defaults to bumping the MINOR version (0.5.0 -> 0.6.0, patch reset to 0). Set the
+# `version` input to publish a specific version instead (e.g. a hotfix: 0.5.1).
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Specific version (X.Y.Z). Leave empty to bump the minor version."
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: write
+  actions: write
+
+# Only one release can be cut at a time.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          # Full history so we can diff against the previous tag for the changelog
+          # and resolve the last released tag for the version bump base.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20
+
+      - name: Resolve the new version
+        id: version
+        env:
+          INPUT: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          # app.json is the source of truth (package.json and build.gradle are kept
+          # in lockstep by scripts/check-version-parity.mjs, which CI enforces).
+          current="$(node -p "require('./app.json').expo.version")"
+          code="$(node -p "require('./app.json').expo.android.versionCode")"
+
+          if [[ -z "$INPUT" ]]; then
+            # Minor bump: drop the existing patch, increment minor, reset patch to 0.
+            [[ "$current" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]] \
+              || { echo "::error::current version '$current' is not X.Y.Z; set the version input explicitly" >&2; exit 1; }
+            next="$(node -p "${BASH_REMATCH[1]} + '.' + (${BASH_REMATCH[2]} + 1) + '.0'")"
+          else
+            next="$INPUT"
+            [[ "$next" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] \
+              || { echo "::error::version '$next' is not X.Y.Z" >&2; exit 1; }
+          fi
+
+          if [[ "$next" == "$current" ]]; then
+            echo "::error::version $next is already the current version — nothing to release" >&2
+            exit 1
+          fi
+
+          echo "current=$current" >> "$GITHUB_OUTPUT"
+          echo "next=$next" >> "$GITHUB_OUTPUT"
+          echo "nextCode=$((code + 1))" >> "$GITHUB_OUTPUT"
+
+      - name: Write the new version
+        env:
+          NEXT: ${{ steps.version.outputs.next }}
+          NEXT_CODE: ${{ steps.version.outputs.nextCode }}
+        run: |
+          set -euo pipefail
+          # package.json
+          node -e "const f='package.json',j=require('./'+f);j.version=process.env.NEXT;require('fs').writeFileSync(f,JSON.stringify(j,null,2)+'\n')"
+          # app.json: expo.version + expo.android.versionCode
+          node -e "const f='app.json',j=require('./'+f);j.expo.version=process.env.NEXT;j.expo.android.versionCode=Number(process.env.NEXT_CODE);require('fs').writeFileSync(f,JSON.stringify(j,null,2)+'\n')"
+          # build.gradle: versionName + versionCode
+          sed -i -E "s/^([[:space:]]*)versionName \"[^\"]*\"/\1versionName \"${NEXT}\"/" android/app/build.gradle
+          sed -i -E "s/^([[:space:]]*)versionCode [0-9]+/\1versionCode ${NEXT_CODE}/" android/app/build.gradle
+
+      - name: Write the changelog
+        env:
+          NEXT: ${{ steps.version.outputs.next }}
+          NEXT_CODE: ${{ steps.version.outputs.nextCode }}
+        run: |
+          set -euo pipefail
+          body="v${NEXT}"
+          # Bullet the commits since the most recent tag; fall back to a bare header.
+          if prev="$(git describe --tags --abbrev=0 2>/dev/null)"; then
+            commits="$(git log --no-merges --pretty='- %s' "${prev}..HEAD" || true)"
+            [[ -n "$commits" ]] && body+=$'\n\n'"$commits"
+          fi
+          for path in "distribution/changelogs/${NEXT_CODE}.txt" \
+                      "fastlane/metadata/android/en-US/changelogs/${NEXT_CODE}.txt"; do
+            mkdir -p "$(dirname "$path")"
+            printf '%s\n' "$body" > "$path"
+          done
+
+      - name: Check version metadata
+        run: node scripts/check-version-parity.mjs
+
+      - name: Commit and tag
+        env:
+          NEXT: ${{ steps.version.outputs.next }}
+          GIT_AUTHOR_NAME: github-actions[bot]
+          GIT_AUTHOR_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+          GIT_COMMITTER_NAME: github-actions[bot]
+          GIT_COMMITTER_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+        run: |
+          set -euo pipefail
+          git config user.name "$GIT_AUTHOR_NAME"
+          git config user.email "$GIT_AUTHOR_EMAIL"
+          git add package.json app.json android/app/build.gradle \
+                  distribution/changelogs fastlane/metadata/android/en-US/changelogs
+          git commit -m "chore: release v${NEXT}"
+          git tag "v${NEXT}"
+
+      - name: Push the release commit and tag
+        env:
+          NEXT: ${{ steps.version.outputs.next }}
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          git remote set-url origin "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git push origin HEAD
+          git push origin "v${NEXT}"
+
+      # Tags pushed with GITHUB_TOKEN do not create workflow runs, so dispatch the
+      # tag-triggered pipelines explicitly. Without this the tag would sit un-built.
+      - name: Trigger build and publish on the new tag
+        env:
+          NEXT: ${{ steps.version.outputs.next }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          for wf in build.yml publish-play-store.yml publish-fdroid.yml; do
+            gh workflow run "$wf" --ref "v${NEXT}" && echo "dispatched $wf on v${NEXT}"
+          done
+
+      - name: Summary
+        env:
+          NEXT: ${{ steps.version.outputs.next }}
+          NEXT_CODE: ${{ steps.version.outputs.nextCode }}
+        run: |
+          echo "### v${NEXT} (versionCode ${NEXT_CODE}) cut" >> "$GITHUB_STEP_SUMMARY"
