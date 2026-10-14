@@ -2,6 +2,7 @@ import { create } from "zustand"
 import { useConnections } from "./connections"
 import type { Agent, Command } from "../lib/sdk"
 import { chooseModelSelection } from "../lib/model-selection"
+import { untilAwake, isWorkspaceWakingError } from "../lib/forge"
 
 export interface ProviderModel {
   id: string
@@ -61,11 +62,31 @@ export const useCatalog = create<CatalogState>((set, get) => ({
     const client = useConnections.getState().client
     if (!client) return
 
-    const [agentResult, commandResult, providerResult] = await Promise.all([
-      client.agent.list().catch(() => [] as Agent[]),
-      client.command.list().catch(() => [] as Command[]),
-      client.provider.list().catch(() => null),
-    ])
+    // A waking workspace answers with 503 + X-Forge-State. Loading a catalog on
+    // top of that is what leaves an empty model picker with no retry, so wait
+    // it out like the session list does (issue #10).
+    const waking =
+      <T>(fallback: T) =>
+      (error: unknown): T => {
+        if (isWorkspaceWakingError(error)) throw error
+        return fallback
+      }
+
+    const woke = await untilAwake(
+      () =>
+        Promise.all([
+          client.agent.list().catch(waking([] as Agent[])),
+          client.command.list().catch(waking([] as Command[])),
+          client.provider.list().catch(waking(null)),
+        ]),
+      {
+        sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+        onState: (info) => useConnections.setState({ workspace: { state: info.state, wakeSeconds: info.wakeSeconds } }),
+      },
+    ).catch(() => null)
+    if (!woke) return
+    if (useConnections.getState().workspace) useConnections.setState({ workspace: null })
+    const [agentResult, commandResult, providerResult] = woke
 
     const agents = Array.isArray(agentResult) ? agentResult : []
     const commands = Array.isArray(commandResult) ? commandResult : []

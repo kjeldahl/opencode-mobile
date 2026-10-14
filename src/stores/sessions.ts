@@ -7,6 +7,7 @@ import { AnalyticsEvent, track } from "../lib/analytics"
 import { extractPromptFromParts, type PromptFromParts } from "../lib/prompt-from-parts"
 import { mergeIncomingMessage } from "../lib/message-merge"
 import { isColdSessionLoad, isLiveEventForSession } from "../lib/session-load-reconcile"
+import { untilAwake, isWorkspaceWakingError } from "../lib/forge"
 
 // Helper to convert API response to our internal format
 function parseMessages(response: MessageWithParts[]): { messages: Message[]; parts: Record<string, Part[]> } {
@@ -81,6 +82,11 @@ export const abortedSessions = new Set<string>()
 // the next value and only commits its result if still the latest.
 let selectSeq = 0
 
+// Which connection `sessions` was last loaded from. A list is only ever the
+// answer of one server, so a switch has to clear it instead of leaving the
+// previous server's rows up while the new one wakes (issue #10).
+let loadedForConnection: string | null = null
+
 // Get the right client for a session's directory
 function clientFor(directory?: string): Client | null {
   const connState = useConnections.getState()
@@ -123,14 +129,30 @@ export const useSessions = create<SessionsState>((set, get) => ({
       return
     }
 
+    // Sessions are per-server. While a new connection is still waking, the old
+    // list must not stay on screen pretending to be the new one (issue #10) —
+    // a switch clears it, and the rows are replaced when this fetch lands.
+    const otherServer = loadedForConnection !== connState.activeConnection?.id
+    if (otherServer) {
+      set({ sessions: [], currentSession: null, messages: [], parts: {} })
+      loadedForConnection = connState.activeConnection?.id ?? null
+    }
+
     try {
       set({ isLoading: true, error: null })
       // A directory-less list includes sessions across projects. Each row carries
       // its own directory into the session route so subsequent operations stay scoped.
-      const sessions = await client.session.list({ roots: true, limit: 50 })
+      const sessions = await untilAwake(() => client.session.list({ roots: true, limit: 50 }), {
+        sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+        onState: (info) => useConnections.setState({ workspace: { state: info.state, wakeSeconds: info.wakeSeconds } }),
+      })
+      if (useConnections.getState().workspace) useConnections.setState({ workspace: null })
       set({ sessions, isLoading: false })
     } catch (error) {
-      set({ error: "Failed to load sessions", isLoading: false })
+      // A waking workspace is not a failed load: the state is already shown as
+      // "starting", so keep the spinner honest instead of raising an error.
+      if (!isWorkspaceWakingError(error)) set({ error: "Failed to load sessions" })
+      set({ isLoading: false })
     }
   },
 

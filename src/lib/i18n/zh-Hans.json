@@ -248,7 +248,8 @@
       "authFailedSubtitle": "{{name}} 拒绝了您的凭据。请检查用户名和密码后重新连接。",
       "checkCredentialsButton": "检查凭据",
       "workspaceWakingTitle": "工作区正在启动",
-      "workspaceWakingSubtitle": "您的工作区正在唤醒，大约需要 {{seconds}} 秒。需要时它会自动启动。",
+      "workspaceWakingCountdown": "您的工作区正在唤醒，大约需要 {{seconds}} 秒。需要时它会自动启动。",
+      "workspaceWakingOvertime": "仍在启动中——可能需要 2 分钟。工作区响应后会立即加载会话。",
       "workspaceStoppedTitle": "工作区已停止",
       "workspaceStoppedSubtitle": "该工作区已被手动停止。请在 forge hub 中重新启动，然后重试。",
       "noSessions": "暂无会话"

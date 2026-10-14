@@ -248,7 +248,8 @@
       "authFailedSubtitle": "{{name}} rejected your credentials. Check the username and password to reconnect.",
       "checkCredentialsButton": "Check Credentials",
       "workspaceWakingTitle": "Workspace starting",
-      "workspaceWakingSubtitle": "Your workspace is waking up — about {{seconds}} seconds. It starts as soon as you need it.",
+      "workspaceWakingCountdown": "Your workspace is waking up — about {{seconds}}s. It starts as soon as you need it.",
+      "workspaceWakingOvertime": "Still starting — this can take up to 2 minutes. The sessions load as soon as the workspace answers.",
       "workspaceStoppedTitle": "Workspace stopped",
       "workspaceStoppedSubtitle": "This workspace was stopped by hand. Start it again from the forge hub, then retry.",
       "noSessions": "No sessions yet"

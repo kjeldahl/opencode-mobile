@@ -199,6 +199,22 @@ export default function SessionsScreen() {
   // Directories collapsed in the grouped session list. Empty by default —
   // all groups start expanded (#67).
   const [collapsedDirs, setCollapsedDirs] = useState<Set<string>>(new Set())
+  // forge gives an estimate (`wake_seconds`), so the waking screen counts down
+  // from it and keeps spinning past zero rather than freezing on "15 seconds"
+  // for a workspace that is taking longer (issue #10).
+  const [wakeLeft, setWakeLeft] = useState<number | null>(null)
+
+  useEffect(() => {
+    if (!workspace || workspace.state === "off") {
+      setWakeLeft(null)
+      return
+    }
+    const seconds = Math.max(1, Math.round(workspace.wakeSeconds ?? 15))
+    const until = Date.now() + seconds * 1000
+    setWakeLeft(seconds)
+    const tick = setInterval(() => setWakeLeft(Math.max(0, Math.round((until - Date.now()) / 1000))), 500)
+    return () => clearInterval(tick)
+  }, [workspace?.state, workspace?.wakeSeconds])
 
   const toggleGroup = useCallback((directory: string) => {
     setCollapsedDirs((prev) => {
@@ -498,22 +514,30 @@ export default function SessionsScreen() {
 
   // forge puts idle workspaces to sleep and wakes them on the next request
   // (~10-15s). That is not an error — say so, and say how long, instead of
-  // showing a connection that looks broken (issue #10).
-  if (workspace) {
+  // showing a connection that looks broken (issue #10). An already-populated
+  // list keeps its rows and gets the banner above it; an empty one is the
+  // screen, because there is nothing else to say.
+  const wakeMessage = !workspace
+    ? ""
+    : workspace.state === "off"
+      ? t("sessionsList.empty.workspaceStoppedSubtitle")
+      : wakeLeft !== null && wakeLeft > 0
+        ? t("sessionsList.empty.workspaceWakingCountdown", { seconds: wakeLeft })
+        : t("sessionsList.empty.workspaceWakingOvertime")
+
+  if (workspace && sessions.length === 0) {
     const stopped = workspace.state === "off"
     return (
       <View style={[styles.emptyContainer, isDark && styles.containerDark]}>
-        <Ionicons name={stopped ? "stop-circle-outline" : "hourglass-outline"} size={64} color={isDark ? "#444444" : "#cccccc"} />
+        {stopped ? (
+          <Ionicons name="stop-circle-outline" size={64} color={isDark ? "#444444" : "#cccccc"} />
+        ) : (
+          <ActivityIndicator size="large" color={isDark ? "#ffffff" : "#0a0a0a"} />
+        )}
         <Text style={[styles.emptyTitle, isDark && styles.textDark]}>
           {t(stopped ? "sessionsList.empty.workspaceStoppedTitle" : "sessionsList.empty.workspaceWakingTitle")}
         </Text>
-        <Text style={[styles.emptySubtitle, isDark && styles.metaDark]}>
-          {stopped
-            ? t("sessionsList.empty.workspaceStoppedSubtitle")
-            : t("sessionsList.empty.workspaceWakingSubtitle", {
-                seconds: Math.max(1, Math.round(workspace.wakeSeconds ?? 15)),
-              })}
-        </Text>
+        <Text style={[styles.emptySubtitle, isDark && styles.metaDark]}>{wakeMessage}</Text>
         {!stopped && (
           <TouchableOpacity
             style={[styles.addButton, isDark && styles.addButtonDark]}
@@ -598,6 +622,13 @@ export default function SessionsScreen() {
       {error && (
         <View style={styles.errorBar}>
           <Text style={styles.errorText}>{error}</Text>
+        </View>
+      )}
+
+      {workspace && (
+        <View style={styles.wakeBar} testID="workspace-waking-banner">
+          <ActivityIndicator size="small" color={isDark ? "#9ca3af" : "#6b7280"} />
+          <Text style={[styles.wakeText, isDark && styles.wakeTextDark]}>{wakeMessage}</Text>
         </View>
       )}
 
@@ -994,6 +1025,23 @@ const styles = StyleSheet.create({
   errorText: {
     color: "#dc2626",
     fontSize: 14,
+  },
+  wakeBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#eff6ff",
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#dbeafe",
+  },
+  wakeText: {
+    color: "#1d4ed8",
+    fontSize: 14,
+    flex: 1,
+  },
+  wakeTextDark: {
+    color: "#93c5fd",
   },
   groupHeader: {
     flexDirection: "row",
