@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next"
 import { Markdown } from "../markdown"
 import { ToolCallCard } from "./ToolCallCard"
 import { ReasoningBlock } from "./ReasoningBlock"
+import { useScrollLock } from "../../stores/scroll-lock"
 import type { Part } from "../../lib/sdk"
 
 interface Props {
@@ -20,6 +21,7 @@ interface Props {
 export function WorkPane({ visible, title, work, isDark, onClose }: Props) {
   const { t } = useTranslation()
   const insets = useSafeAreaInsets()
+  const scrollLocked = useScrollLock((s) => s.locked)
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -34,7 +36,7 @@ export function WorkPane({ visible, title, work, isDark, onClose }: Props) {
               <Ionicons name="close" size={22} color={isDark ? "#ffffff" : "#0a0a0a"} />
             </TouchableOpacity>
           </View>
-          <ScrollView contentContainerStyle={s.list}>
+          <ScrollView scrollEnabled={!scrollLocked} contentContainerStyle={s.list}>
             {work.map((part) => {
               if (part.type === "tool") return <ToolCallCard key={part.id} tool={part} isDark={isDark} />
               if (part.type === "reasoning") return <ReasoningBlock key={part.id} text={part.text || ""} isDark={isDark} style={s.reasoning} />

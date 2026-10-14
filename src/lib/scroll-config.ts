@@ -10,9 +10,14 @@
 export interface HorizontalScrollConfig {
   horizontal: true
   showsHorizontalScrollIndicator: boolean
+  // GitHub issue #14: these ScrollViews live inside a vertical FlatList. Without
+  // nestedScrollEnabled the parent steals the touch on Android and scrolls
+  // vertically instead of letting the wide content scroll horizontally.
+  nestedScrollEnabled: boolean
 }
 
 export const WIDE_CONTENT_SCROLL_CONFIG: HorizontalScrollConfig = {
   horizontal: true,
   showsHorizontalScrollIndicator: true,
+  nestedScrollEnabled: true,
 }
