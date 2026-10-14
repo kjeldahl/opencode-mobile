@@ -32,6 +32,7 @@ import { UpdateBanner } from "../../src/components/UpdateBanner"
 import { nameOf } from "../../src/lib/path-utils"
 import { newChatDir, newChatProjects, projectDir, projectName, tracksChanges } from "../../src/lib/projects"
 import { SETUP_GUIDE_URL } from "../../src/lib/links"
+import { connectionBanner } from "../../src/lib/connection-status"
 
 function formatTime(timestamp: number, t: (key: string, opts?: Record<string, unknown>) => string): string {
   const date = new Date(timestamp)
@@ -187,6 +188,7 @@ export default function SessionsScreen() {
   } = useConnections()
   const workspace = useConnections((s) => s.workspace)
   const authError = useEvents((s) => s.authError)
+  const reconnectAttempts = useEvents((s) => s.reconnectAttempts)
   const reconnect = useEvents((s) => s.connect)
   const loadCatalog = useCatalog((s) => s.load)
   const dirSheetRef = useRef<BottomSheet>(null)
@@ -514,16 +516,21 @@ export default function SessionsScreen() {
 
   // forge puts idle workspaces to sleep and wakes them on the next request
   // (~10-15s). That is not an error — say so, and say how long, instead of
-  // showing a connection that looks broken (issue #10). An already-populated
-  // list keeps its rows and gets the banner above it; an empty one is the
-  // screen, because there is nothing else to say.
-  const wakeMessage = !workspace
-    ? ""
-    : workspace.state === "off"
+  // showing a connection that looks broken (issue #10). A wake outranks a
+  // retry: if the stream is down because the workspace is booting, "attempt 3"
+  // is the wrong thing to say. An already-populated list keeps its rows and
+  // gets the banner above it; an empty one is the screen.
+  const banner = connectionBanner(workspace, reconnectAttempts)
+  const bannerMessage =
+    banner.kind === "stopped"
       ? t("sessionsList.empty.workspaceStoppedSubtitle")
-      : wakeLeft !== null && wakeLeft > 0
-        ? t("sessionsList.empty.workspaceWakingCountdown", { seconds: wakeLeft })
-        : t("sessionsList.empty.workspaceWakingOvertime")
+      : banner.kind === "waking"
+        ? wakeLeft !== null && wakeLeft > 0
+          ? t("sessionsList.empty.workspaceWakingCountdown", { seconds: wakeLeft })
+          : t("sessionsList.empty.workspaceWakingOvertime")
+        : banner.kind === "retrying"
+          ? t("session.banners.reconnecting", { attempt: banner.attempt })
+          : ""
 
   if (workspace && sessions.length === 0) {
     const stopped = workspace.state === "off"
@@ -537,7 +544,7 @@ export default function SessionsScreen() {
         <Text style={[styles.emptyTitle, isDark && styles.textDark]}>
           {t(stopped ? "sessionsList.empty.workspaceStoppedTitle" : "sessionsList.empty.workspaceWakingTitle")}
         </Text>
-        <Text style={[styles.emptySubtitle, isDark && styles.metaDark]}>{wakeMessage}</Text>
+        <Text style={[styles.emptySubtitle, isDark && styles.metaDark]}>{bannerMessage}</Text>
         {!stopped && (
           <TouchableOpacity
             style={[styles.addButton, isDark && styles.addButtonDark]}
@@ -625,10 +632,10 @@ export default function SessionsScreen() {
         </View>
       )}
 
-      {workspace && (
-        <View style={styles.wakeBar} testID="workspace-waking-banner">
+      {banner.kind !== "none" && (
+        <View style={styles.wakeBar} testID="connection-banner">
           <ActivityIndicator size="small" color={isDark ? "#9ca3af" : "#6b7280"} />
-          <Text style={[styles.wakeText, isDark && styles.wakeTextDark]}>{wakeMessage}</Text>
+          <Text style={[styles.wakeText, isDark && styles.wakeTextDark]}>{bannerMessage}</Text>
         </View>
       )}
 

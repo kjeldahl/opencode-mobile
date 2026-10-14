@@ -66,6 +66,8 @@
     },
     "banners": {
       "reconnecting": "Reconnecting… (attempt {{attempt}})",
+      "workspaceWaking": "Workspace starting… about {{seconds}}s",
+      "workspaceStopped": "Workspace stopped — start it from the forge hub",
       "connected": "Connected ✓",
       "reverted": "Message reverted — resend to confirm",
       "undo": "Undo"

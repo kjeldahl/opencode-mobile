@@ -66,6 +66,8 @@
     },
     "banners": {
       "reconnecting": "正在重新连接…（第 {{attempt}} 次尝试）",
+      "workspaceWaking": "工作区正在启动…大约 {{seconds}} 秒",
+      "workspaceStopped": "工作区已停止 — 请在 forge hub 中启动",
       "connected": "已连接 ✓",
       "reverted": "消息已撤回 — 重新发送以确认",
       "undo": "撤销"
