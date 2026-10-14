@@ -16,8 +16,8 @@ function read(relativePath: string): string {
 }
 
 test("inner horizontal ScrollViews lock the parent during drag", () => {
-  for (const file of ["chat/DiffView.tsx", "markdown/CodeBlock.tsx"]) {
-    const src = read(`../src/components/${file}`)
+  for (const file of ["components/chat/DiffView.tsx", "components/markdown/CodeBlock.tsx"]) {
+    const src = read(`../${file}`)
     assert.match(src, /onScrollBeginDrag=\{useScrollLock\.getState\(\)\.lock\}/, `${file} must lock on drag begin`)
     assert.match(src, /onScrollEndDrag=\{useScrollLock\.getState\(\)\.unlock\}/, `${file} must unlock on drag end`)
     assert.match(src, /onMomentumScrollEnd=\{useScrollLock\.getState\(\)\.unlock\}/, `${file} must unlock on momentum end`)
@@ -26,7 +26,7 @@ test("inner horizontal ScrollViews lock the parent during drag", () => {
 
 test("the parent lists disable scrolling while locked", () => {
   const chat = read("../../app/session/[id].tsx")
-  const work = read("../src/components/chat/WorkPane.tsx")
+  const work = read("../components/chat/WorkPane.tsx")
   assert.match(chat, /scrollEnabled=\{!scrollLocked\}/, "chat FlatList must honor the lock")
   assert.match(work, /scrollEnabled=\{!scrollLocked\}/, "WorkPane ScrollView must honor the lock")
 })
