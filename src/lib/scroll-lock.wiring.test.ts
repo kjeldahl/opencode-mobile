@@ -30,3 +30,13 @@ test("the parent lists disable scrolling while locked", () => {
   assert.match(chat, /scrollEnabled=\{!scrollLocked\}/, "chat FlatList must honor the lock")
   assert.match(work, /scrollEnabled=\{!scrollLocked\}/, "WorkPane ScrollView must honor the lock")
 })
+
+test("ToolCallCard taps only the header, not the code/diff", () => {
+  const card = read("../components/chat/ToolCallCard.tsx")
+  // The card is a plain View (not one big TouchableOpacity), and the press is
+  // bound to the header only — otherwise a drag meant to scroll code would
+  // collapse the card and no inner scroll view could win the gesture.
+  assert.match(card, /<View\s+style=\{\[\s*s\.card/, "card must be a View, not a touchable")
+  assert.match(card, /<TouchableOpacity style=\{s\.header\} onPress=\{toggle\}/, "only the header toggles")
+  assert.doesNotMatch(card, /<TouchableOpacity\s+style=\{\[\s*s\.card/, "the whole card must not be pressable")
+})
