@@ -1,8 +1,9 @@
 // Groups a session's messages into chat rows: each user message is its own
 // row, and every run of assistant messages between two user messages is one
-// "turn". A turn keeps its trailing answer text visible and collapses the
-// work before it (tool calls, reasoning, intermediate text) behind a single
-// summary line. No React Native imports — unit-testable with node --test.
+// "turn". A turn keeps its answer text visible and collapses the work (tool
+// calls, reasoning) behind summary lines; text the agent writes between tool
+// calls stays in chat and splits the work into separate summaries. No React
+// Native imports — unit-testable with node --test.
 import type { Message, Part } from "./sdk"
 
 export interface Entry {
@@ -10,11 +11,20 @@ export interface Entry {
   parts: Part[]
 }
 
+// A run of collapsed work followed by the text the agent wrote after it.
+export interface Segment {
+  id: string
+  // Collapsed into the work pane, chronological.
+  work: Part[]
+  // Intermediate text, shown in chat.
+  text: Part[]
+}
+
 export interface Turn {
   id: string
   messages: Message[]
-  // Collapsed into the work pane, chronological.
-  work: Part[]
+  // Work and intermediate text before the answer, chronological.
+  segments: Segment[]
   // Running/pending tools of the in-flight turn, shown in full.
   live: Part[]
   // Reasoning right before the answer, behind the brain toggle.
@@ -45,6 +55,22 @@ function pending(part: Part): boolean {
   return part.type === "tool" && (status === "running" || status === "pending")
 }
 
+/** Splits work at intermediate text: each text run closes a segment. */
+function split(parts: Part[]): Segment[] {
+  const segments: Segment[] = []
+  for (const part of parts) {
+    const last = segments[segments.length - 1]
+    const text = part.type === "text"
+    if (last && (text || last.text.length === 0)) {
+      if (text) last.text.push(part)
+      if (!text) last.work.push(part)
+      continue
+    }
+    segments.push({ id: part.id, work: text ? [] : [part], text: text ? [part] : [] })
+  }
+  return segments
+}
+
 /** Builds one turn from consecutive assistant entries. `busy` marks it in flight. */
 export function buildTurn(entries: Entry[], busy: boolean): Turn {
   const all = entries.flatMap((e) => e.parts)
@@ -61,7 +87,7 @@ export function buildTurn(entries: Entry[], busy: boolean): Turn {
   return {
     id: messages[0].id,
     messages,
-    work: head.filter((p) => !(busy && pending(p))),
+    segments: split(head.filter((p) => !(busy && pending(p)))),
     live: busy ? head.filter(pending) : [],
     thinking: tail.filter((p) => p.type === "reasoning"),
     final: tail.filter((p) => p.type === "text"),
@@ -108,10 +134,15 @@ function sameList<T>(a: T[], b: T[]): boolean {
  * parts/messages with new objects, so this catches every real change while
  * letting completed turns skip re-rendering during streaming.
  */
+function sameSegments(a: Segment[], b: Segment[]): boolean {
+  if (a.length !== b.length) return false
+  return a.every((seg, i) => sameList(seg.work, b[i].work) && sameList(seg.text, b[i].text))
+}
+
 export function sameTurn(a: Turn, b: Turn): boolean {
   return (
     sameList(a.messages, b.messages) &&
-    sameList(a.work, b.work) &&
+    sameSegments(a.segments, b.segments) &&
     sameList(a.live, b.live) &&
     sameList(a.thinking, b.thinking) &&
     sameList(a.final, b.final) &&

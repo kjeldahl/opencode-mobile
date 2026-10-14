@@ -1,6 +1,6 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
-import { buildRows, buildTurn, sameTurn, summarize, type Entry } from "./turns.ts"
+import { buildRows, buildTurn, sameTurn, summarize, type Entry, type Turn } from "./turns.ts"
 import type { Message, Part } from "./sdk.ts"
 
 const msg = (id: string, role: "user" | "assistant", extra: Partial<Message> = {}): Message => ({
@@ -19,6 +19,8 @@ const tool = (id: string, name: string, status: "pending" | "running" | "complet
   tool: name,
   state: { status, input },
 })
+const work = (turn: Turn) => turn.segments.map((s) => s.work.map((p) => p.id))
+const notes = (turn: Turn) => turn.segments.map((s) => s.text.map((p) => p.id))
 
 test("consecutive assistant messages collapse into one turn per user message", () => {
   const entries: Entry[] = [
@@ -33,7 +35,7 @@ test("consecutive assistant messages collapse into one turn per user message", (
   const row = rows[1]
   assert.ok(row.kind === "turn")
   const turn = row.turn
-  assert.deepEqual(turn.work.map((p) => p.id), ["r1", "x1", "x2"])
+  assert.deepEqual(work(turn), [["r1", "x1", "x2"]])
   assert.deepEqual(turn.thinking.map((p) => p.id), ["r3"])
   assert.deepEqual(turn.final.map((p) => p.id), ["t3"])
   assert.deepEqual(turn.live, [])
@@ -42,19 +44,37 @@ test("consecutive assistant messages collapse into one turn per user message", (
   assert.equal(turn.modelID, "m3")
 })
 
-test("intermediate text goes to the work pane, trailing text stays", () => {
+test("intermediate text stays in chat, trailing text is the answer", () => {
   const turn = buildTurn([{ message: msg("a", "assistant"), parts: [text("t1", "Let me look"), tool("x", "bash", "completed"), text("t2", "Answer")] }], false)
-  assert.deepEqual(turn.work.map((p) => p.id), ["t1", "x"])
+  assert.deepEqual(work(turn), [[], ["x"]])
+  assert.deepEqual(notes(turn), [["t1"], []])
+  assert.deepEqual(turn.final.map((p) => p.id), ["t2"])
+})
+
+test("intermediate text splits the work into separate segments", () => {
+  const parts = [
+    think("r1", "plan"),
+    tool("x1", "read", "completed"),
+    tool("x2", "grep", "completed"),
+    text("t1", "Found it, fixing now."),
+    think("r2", "how"),
+    tool("x3", "edit", "completed"),
+    text("t2", "Done."),
+  ]
+  const turn = buildTurn([{ message: msg("a", "assistant"), parts }], false)
+  assert.deepEqual(turn.segments.map((s) => s.id), ["r1", "r2"])
+  assert.deepEqual(work(turn), [["r1", "x1", "x2"], ["r2", "x3"]])
+  assert.deepEqual(notes(turn), [["t1"], []])
   assert.deepEqual(turn.final.map((p) => p.id), ["t2"])
 })
 
 test("busy turn shows running tools live, not in the summary", () => {
   const parts = [tool("x1", "read", "completed"), tool("x2", "bash", "running")]
   const busy = buildTurn([{ message: msg("a", "assistant"), parts }], true)
-  assert.deepEqual(busy.work.map((p) => p.id), ["x1"])
+  assert.deepEqual(work(busy), [["x1"]])
   assert.deepEqual(busy.live.map((p) => p.id), ["x2"])
   const idle = buildTurn([{ message: msg("a", "assistant"), parts }], false)
-  assert.deepEqual(idle.work.map((p) => p.id), ["x1", "x2"])
+  assert.deepEqual(work(idle), [["x1", "x2"]])
   assert.deepEqual(idle.live, [])
 })
 
@@ -75,7 +95,7 @@ test("empty text and step markers are ignored", () => {
     [{ message: msg("a", "assistant"), parts: [{ id: "s", messageID: "a", type: "step-start" }, text("t", "  "), text("t2", "x")] }],
     false,
   )
-  assert.deepEqual(turn.work, [])
+  assert.deepEqual(turn.segments, [])
   assert.deepEqual(turn.final.map((p) => p.id), ["t2"])
 })
 
@@ -108,4 +128,8 @@ test("sameTurn compares by reference", () => {
   assert.ok(sameTurn(buildTurn(entries, false), buildTurn(entries, false)))
   const changed = [{ message: entries[0].message, parts: [parts[0], text("t", "ab")] }]
   assert.ok(!sameTurn(buildTurn(entries, false), buildTurn(changed, false)))
+  const middle = [{ message: entries[0].message, parts: [text("n", "a"), ...parts] }]
+  const edited = [{ message: entries[0].message, parts: [text("n", "ab"), ...parts] }]
+  assert.ok(sameTurn(buildTurn(middle, false), buildTurn(middle, false)))
+  assert.ok(!sameTurn(buildTurn(middle, false), buildTurn(edited, false)))
 })
