@@ -33,6 +33,8 @@ import {
   VariantPicker,
   ImageAttachments,
   SessionInfo,
+  SessionTitle,
+  SessionTitleFull,
   PrButton,
   PrMenu,
   usePr,
@@ -99,6 +101,8 @@ export default function SessionScreen() {
   inputRef.current = input
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [showInfo, setShowInfo] = useState(false)
+  const [headerRightWidth, setHeaderRightWidth] = useState(0)
+  const [titleOpen, setTitleOpen] = useState(false)
   const [keyboard, setKeyboard] = useState(() => Keyboard.metrics() ?? null)
   const keyboardHeight = keyboard?.height ?? 0
 
@@ -661,14 +665,17 @@ export default function SessionScreen() {
       <Stack.Screen
         options={{
           title: currentSession?.title || t("session.titleFallback"),
+          headerTitle: ({ children }) => (
+            <SessionTitle
+              title={children}
+              location={shortDir}
+              isDark={isDark}
+              right={headerRightWidth}
+              onPress={() => setTitleOpen((v) => !v)}
+            />
+          ),
           headerRight: () => (
-            <View style={s.headerRight}>
-              {shortDir && (
-                <View style={[s.dirBadge, isDark && s.dirBadgeDark]}>
-                  <Ionicons name="folder-outline" size={14} color={isDark ? "#888888" : "#666666"} />
-                  <Text style={[s.dirText, isDark && s.dirTextDark]}>{shortDir}</Text>
-                </View>
-              )}
+            <View style={s.headerRight} onLayout={(e) => setHeaderRightWidth(e.nativeEvent.layout.width)}>
               <TouchableOpacity
                 style={[s.changesChip, isDark && s.dirBadgeDark]}
                 onPress={openChanges}
@@ -716,6 +723,15 @@ export default function SessionScreen() {
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         keyboardVerticalOffset={keyboardVerticalOffset(Platform.OS, insets.top)}
       >
+        {titleOpen && (
+          <SessionTitleFull
+            title={currentSession?.title || t("session.titleFallback")}
+            directory={currentSession?.directory}
+            isDark={isDark}
+            onPress={() => setTitleOpen(false)}
+          />
+        )}
+
         {/* Session info pulldown */}
         <SessionInfo
           session={currentSession}
@@ -1171,15 +1187,6 @@ const s = StyleSheet.create({
 
   // Header
   headerRight: { flexDirection: "row", alignItems: "center", gap: 8 },
-  dirBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: "#f5f5f5",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
   dirBadgeDark: { backgroundColor: "#1a1a1a" },
   changesChip: {
     flexDirection: "row",
@@ -1192,8 +1199,6 @@ const s = StyleSheet.create({
   },
   changesAdd: { fontSize: 12, fontWeight: "600", color: "#16a34a" },
   changesDel: { fontSize: 12, fontWeight: "600", color: "#dc2626" },
-  dirText: { fontSize: 12, color: "#666666", fontWeight: "500" },
-  dirTextDark: { color: "#888888" },
 
   // SSE reconnect/connected banner
   banner: {
