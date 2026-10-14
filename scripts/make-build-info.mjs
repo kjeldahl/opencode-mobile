@@ -1,7 +1,7 @@
-// Writes src/lib/build-info.json at build time. Empty in the repo, so releases
+// Writes src/lib/build-info.json. Empties in the repo mean release/main builds
 // show only the version; CI fills it in on PR builds so the About screen can
 // link the PR and the commit the APK was built from.
-import { mkdirSync, writeFileSync } from "node:fs"
+import { writeFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 

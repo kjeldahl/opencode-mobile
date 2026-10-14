@@ -232,9 +232,7 @@ export default function SettingsScreen() {
             </Text>
             {/* PR builds stamp the PR number and commit sha (build-info.json), so a
                 side-loaded APK says which CI artifact it came from. */}
-            <Text style={styles.settingDescription}>
-              <BuildStampLinks style={styles.settingDescription} />
-            </Text>
+            <BuildStampLinks style={styles.settingDescription} />
 
           </View>
           {updateAvailable && (

@@ -53,11 +53,11 @@ export function buildStamp(info: BuildInfo = BUILD_INFO): string {
 export function BuildStampLinks({ style }: { style?: StyleProp<TextStyle> }) {
   if (!BUILD_INFO.pr || !BUILD_INFO.sha) return null
   return (
-    <>
+    <Text style={style}>
       <TextLink text={prLabel()} url={prUrl()} style={style} />
       <Text style={style}> </Text>
       <TextLink text={shaLabel()} url={commitUrl()} style={style} />
-    </>
+    </Text>
   )
 }
 
