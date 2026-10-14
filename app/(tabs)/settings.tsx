@@ -22,8 +22,9 @@ import {
 } from "../../src/lib/notifications"
 import type { Category } from "../../src/lib/notifications"
 import { CURRENT_VERSION, checkForUpdate, type AvailableUpdate } from "../../src/lib/update-check"
-import type { LocalePreference } from "../../src/lib/i18n/locale-resolve"
+import { BuildStampLinks } from "../../src/lib/build-info"
 
+import type { LocalePreference } from "../../src/lib/i18n/locale-resolve"
 function SettingRow({
   icon,
   label,
@@ -217,25 +218,28 @@ export default function SettingsScreen() {
           onPress={handleLanguagePress}
           right={<Ionicons name="chevron-forward" size={20} color={isDark ? "#666666" : "#999999"} />}
         />
-        <SettingRow
-          icon="information-circle"
-          label={t("settings.about.version")}
-          // Was hard-coded "1.0.0" — wrong for every build ever shipped, and the
-          // one place a user could have checked what they are running while 64%
-          // of the base sat on a four-week-old build (AGE-110).
-          description={
-            updateAvailable
-              ? `${CURRENT_VERSION} → ${updateAvailable.version}`
-              : `${CURRENT_VERSION} · ${t("update.upToDate")}`
-          }
-          isDark={isDark}
-          onPress={updateAvailable ? () => Linking.openURL(updateAvailable.url) : undefined}
-          right={
-            updateAvailable ? (
+        <View style={styles.settingRow}>
+          <View style={[styles.settingIcon, isDark && styles.settingIconDark]}>
+            <Ionicons name="information-circle" size={22} color={isDark ? "#ffffff" : "#0a0a0a"} />
+          </View>
+          <View style={styles.settingContent}>
+            <Text style={[styles.settingLabel, isDark && styles.textDark]}>{t("settings.about.version")}</Text>
+            {/* Released/main builds show the version exactly as before; PR builds
+                additionally stamp the PR# and commit (build-info.json) so a
+                side-loaded CI APK says which pull request it came from. */}
+            <Text style={[styles.settingDescription, isDark && styles.metaDark]}>
+              {updateAvailable
+                ? `${CURRENT_VERSION} → ${updateAvailable.version}`
+                : `${CURRENT_VERSION} · ${t("update.upToDate")}`}
+            </Text>
+            <BuildStampLinks style={styles.settingDescription} />
+          </View>
+          {updateAvailable && (
+            <TouchableOpacity onPress={() => Linking.openURL(updateAvailable.url)}>
               <Ionicons name="arrow-up-circle" size={20} color={isDark ? "#7dd3fc" : "#0369a1"} />
-            ) : undefined
-          }
-        />
+            </TouchableOpacity>
+          )}
+        </View>
         <SettingRow
           icon="logo-github"
           label={t("settings.about.github.label")}
