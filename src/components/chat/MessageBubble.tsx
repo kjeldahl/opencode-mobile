@@ -1,11 +1,13 @@
 import { memo } from "react"
-import { View, Text, Image, StyleSheet, ScrollView, TouchableOpacity, Dimensions } from "react-native"
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions } from "react-native"
+import { Image } from "expo-image"
 import { Ionicons } from "@expo/vector-icons"
 import { Markdown } from "../markdown"
 import { ToolCallCard } from "./ToolCallCard"
 import { ReasoningBlock } from "./ReasoningBlock"
 import type { Message, Part } from "../../lib/sdk"
 import { stripMarkers } from "../../lib/pr"
+import { imageError, imageLoad } from "../../lib/image-diagnostics"
 
 const SCREEN_WIDTH = Dimensions.get("window").width
 
@@ -73,7 +75,15 @@ export const MessageBubble = memo(
           >
             {fileParts.map((fp) => (
               <View key={fp.id} style={s.imageWrap}>
-                <Image source={{ uri: fp.url }} style={s.attachedImage} resizeMode="cover" />
+                <Image
+                  key={fp.id}
+                  source={{ uri: fp.url }}
+                  style={s.attachedImage}
+                  contentFit="cover"
+                  recyclingKey={fp.id}
+                  onError={(e) => imageError("bubble", fp.url ?? "", e.error)}
+                  onLoad={(e) => imageLoad("bubble", fp.url ?? "", e.source.width, e.source.height)}
+                />
                 {fp.filename && (
                   <Text style={[s.imageLabel, isDark && s.imageLabelDark]} numberOfLines={1}>
                     {fp.filename}

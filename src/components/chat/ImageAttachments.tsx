@@ -1,5 +1,7 @@
-import { View, Text, Image, TouchableOpacity, StyleSheet, ScrollView } from "react-native"
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from "react-native"
+import { Image } from "expo-image"
 import { Ionicons } from "@expo/vector-icons"
+import { imageError, imageLoad } from "../../lib/image-diagnostics"
 
 export interface Attachment {
   uri: string
@@ -24,7 +26,13 @@ export function ImageAttachments({ attachments, isDark, onRemove }: Props) {
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.scroll}>
         {attachments.map((att, idx) => (
           <View key={`${att.uri}-${idx}`} style={s.thumb}>
-            <Image source={{ uri: att.uri }} style={s.image} resizeMode="cover" />
+            <Image
+              source={{ uri: att.uri }}
+              style={s.image}
+              contentFit="cover"
+              onError={(e) => imageError("composer", att.uri, e.error)}
+              onLoad={(e) => imageLoad("composer", att.uri, e.source.width, e.source.height)}
+            />
             <TouchableOpacity style={[s.remove, isDark && s.removeDark]} onPress={() => onRemove(idx)}>
               <Ionicons name="close" size={14} color="#ffffff" />
             </TouchableOpacity>

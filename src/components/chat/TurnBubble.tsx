@@ -1,11 +1,13 @@
 import { memo, useState } from "react"
-import { View, Text, Image, StyleSheet, ScrollView, TouchableOpacity, Dimensions } from "react-native"
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions } from "react-native"
+import { Image } from "expo-image"
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons"
 import { useTranslation } from "react-i18next"
 import { Markdown } from "../markdown"
 import { ToolCallCard } from "./ToolCallCard"
 import { WorkPane } from "./WorkPane"
 import { sameTurn, summarize, type Turn } from "../../lib/turns"
+import { imageError, imageLoad } from "../../lib/image-diagnostics"
 import type { Part } from "../../lib/sdk"
 
 const SCREEN_WIDTH = Dimensions.get("window").width
@@ -94,7 +96,15 @@ export const TurnBubble = memo(
         {turn.files.length > 0 && (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.imageRow} style={s.imageScroll}>
             {turn.files.map((fp) => (
-              <Image key={fp.id} source={{ uri: fp.url }} style={s.image} resizeMode="cover" />
+              <Image
+                key={fp.id}
+                source={{ uri: fp.url }}
+                style={s.image}
+                contentFit="cover"
+                recyclingKey={fp.id}
+                onError={(e) => imageError("turn", fp.url ?? "", e.error)}
+                onLoad={(e) => imageLoad("turn", fp.url ?? "", e.source.width, e.source.height)}
+              />
             ))}
           </ScrollView>
         )}
