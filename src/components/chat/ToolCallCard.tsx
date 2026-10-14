@@ -338,7 +338,7 @@ export function ToolCallCard({ tool, isDark }: Props) {
       {/* Only the header is pressable. The expanded detail (code/diff) lives
           outside this touchable, otherwise a tap meant to scroll the code would
           collapse the card and the inner scroll views could never win a gesture. */}
-      <TouchableOpacity style={s.header} onPress={toggle} activeOpacity={hasDetail ? 0.7 : 1}>
+      <TouchableOpacity style={s.header} onPress={toggle} activeOpacity={hasDetail ? 0.7 : 1} testID="tool-call-card-header">
         {/* Header row */}
         <View style={s.headerLeft}>
           <Ionicons name={icon as any} size={16} color={color} />
@@ -366,7 +366,7 @@ export function ToolCallCard({ tool, isDark }: Props) {
 
       {/* Expanded detail */}
       {expanded && (
-        <ScrollView style={s.detailScroll} nestedScrollEnabled showsVerticalScrollIndicator={false}>
+        <ScrollView style={s.detailScroll} nestedScrollEnabled showsVerticalScrollIndicator={false} testID="tool-call-card-detail">
           {error && <ErrorBanner message={error} isDark={isDark} />}
           <ToolDetail tool={tool} isDark={isDark} />
         </ScrollView>
