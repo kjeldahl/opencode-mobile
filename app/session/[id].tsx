@@ -50,6 +50,7 @@ import { useSpeech } from "../../src/lib/speech"
 import { keyboardPadding, keyboardVerticalOffset } from "../../src/lib/keyboard-offset"
 import { composerMaxHeight } from "../../src/lib/session-layout"
 import { useChanges, useHeadline, useOnTurnEnd } from "../../src/stores/changes"
+import { useScrollLock } from "../../src/stores/scroll-lock"
 
 // --- Builtin slash commands ---
 const BUILTIN_COMMANDS: SlashCommand[] = [
@@ -92,6 +93,7 @@ export default function SessionScreen() {
   const { t } = useTranslation()
 
   const flatListRef = useRef<FlatList>(null)
+  const scrollLocked = useScrollLock((s) => s.locked)
   const modelSheetRef = useRef<BottomSheet>(null)
   const variantSheetRef = useRef<BottomSheet>(null)
   const [input, setInputState] = useState(() => (id ? useSessions.getState().drafts[id] || "" : ""))
@@ -790,6 +792,7 @@ export default function SessionScreen() {
               ref={flatListRef}
               data={messageData}
               inverted
+              scrollEnabled={!scrollLocked}
               keyExtractor={(item) => item.id}
               renderItem={({ item }) =>
                 item.kind === "turn" ? (

@@ -1,5 +1,6 @@
 import { View, Text, StyleSheet, Platform, ScrollView } from "react-native"
 import { WIDE_CONTENT_SCROLL_CONFIG } from "../../lib/scroll-config"
+import { useScrollLock } from "../../stores/scroll-lock"
 import { computeDiff, type DiffLine } from "./diff-compute"
 
 const mono = Platform.OS === "ios" ? "Menlo" : "monospace"
@@ -17,7 +18,13 @@ export function DiffView({ before, after, isDark }: Props) {
 
   return (
     <View style={[s.container, isDark && s.containerDark]}>
-      <ScrollView {...WIDE_CONTENT_SCROLL_CONFIG} testID="diff-view-scroll">
+      <ScrollView
+        {...WIDE_CONTENT_SCROLL_CONFIG}
+        testID="diff-view-scroll"
+        onScrollBeginDrag={useScrollLock.getState().lock}
+        onScrollEndDrag={useScrollLock.getState().unlock}
+        onMomentumScrollEnd={useScrollLock.getState().unlock}
+      >
         <View>
           {lines.map((line, idx) => (
             <DiffRow key={idx} line={line} isDark={isDark} />

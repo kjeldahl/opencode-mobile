@@ -2,6 +2,7 @@ import { useState } from "react"
 import { View, Text, TouchableOpacity, StyleSheet, useColorScheme, Platform, ScrollView } from "react-native"
 import * as Clipboard from "expo-clipboard"
 import { WIDE_CONTENT_SCROLL_CONFIG } from "../../lib/scroll-config"
+import { useScrollLock } from "../../stores/scroll-lock"
 
 interface Props {
   code: string
@@ -28,7 +29,14 @@ export function CodeBlock({ code, language }: Props) {
           <Text style={[styles.copyBtn, isDark && styles.copyBtnDark]}>{copied ? "Copied!" : "Copy"}</Text>
         </TouchableOpacity>
       </View>
-      <ScrollView {...WIDE_CONTENT_SCROLL_CONFIG} testID="code-block-scroll" contentContainerStyle={styles.codeScroll}>
+      <ScrollView
+        {...WIDE_CONTENT_SCROLL_CONFIG}
+        testID="code-block-scroll"
+        contentContainerStyle={styles.codeScroll}
+        onScrollBeginDrag={useScrollLock.getState().lock}
+        onScrollEndDrag={useScrollLock.getState().unlock}
+        onMomentumScrollEnd={useScrollLock.getState().unlock}
+      >
         <Text style={[styles.code, isDark && styles.codeDark]} selectable>
           {code}
         </Text>
