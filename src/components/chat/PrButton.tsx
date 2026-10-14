@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react"
-import { View, Text, StyleSheet, TouchableOpacity, Pressable, ActivityIndicator, Linking } from "react-native"
+import { useCallback, useEffect, useMemo, useState } from "react"
+import { View, Text, StyleSheet, TouchableOpacity, Pressable, ActivityIndicator, Linking, AppState } from "react-native"
+import { useFocusEffect } from "expo-router"
 import { Ionicons } from "@expo/vector-icons"
 import { useTranslation } from "react-i18next"
 import type { Message, Part, VcsInfo } from "../../lib/sdk"
@@ -15,34 +16,72 @@ import {
   type PrTone,
   type PrView,
 } from "../../lib/pr"
-import { infoKey, useChanges, vcsKey } from "../../stores/changes"
+import { infoKey, useChanges, useOnTurnEnd, vcsKey } from "../../stores/changes"
+import { prKey, usePrStore } from "../../stores/pr"
 
 // PR button in the chat toolbar plus its menu: opens a PR for the chat's
 // branch, then shows its CI checks. The menu links to GitHub and asks the
-// agent to create, refresh, watch-and-fix, or merge. All GitHub work is done
-// by the agent via `gh`; state comes from the status lines it prints (see
-// lib/pr.ts).
+// agent to create, watch-and-fix, or merge (it writes code, via `gh`). On
+// forge the state is read from GET /__forge/pr and "Refresh" queries it
+// directly (issue #15); on a plain opencode server the state comes from the
+// status lines the agent prints and "Refresh" asks the agent (see lib/pr.ts).
 
 export interface PrModel {
   info: VcsInfo & { branch: string }
   pr: PrStatus | undefined
   view: PrView
+  // State comes from forge, not the transcript.
+  forge: boolean
+  // Query forge again; `manual` bypasses its cache and shows "Checking…".
+  sync: (manual?: boolean) => void
 }
+
+// Re-poll while checks run and the chat is on screen.
+const POLL_MS = 45_000
 
 // Undefined: no button (no PR and nothing to open one for).
 export function usePr(
   directory: string | undefined,
+  sessionID: string | undefined,
   messages: Message[],
   parts: Record<string, Part[]>,
   busy: boolean,
 ): PrModel | undefined {
   const info = useChanges((state) => (directory ? state.info[infoKey(directory)] : undefined))
   const branch = useChanges((state) => (directory ? state.entries[vcsKey(directory, "branch")]?.diffs : undefined))
-  const pr = useMemo(() => prFromTranscript(messages, parts, info?.branch), [messages, parts, info?.branch])
+  const entry = usePrStore((state) => (directory ? state.entries[prKey(directory)] : undefined))
+  const forge = entry?.result?.supported ? entry.result : undefined
+  const transcript = useMemo(
+    () => (forge ? undefined : prFromTranscript(messages, parts, info?.branch)),
+    [forge, messages, parts, info?.branch],
+  )
+  const pr = forge ? forge.pr : transcript
   const action = useMemo(() => lastAction(messages, parts), [messages, parts])
-  const view = prView({ ready: prReady(info, branch), pr, action, busy })
+
+  const sync = useCallback(
+    (manual?: boolean) => {
+      if (directory) void usePrStore.getState().load(directory, { refresh: manual, manual })
+    },
+    [directory],
+  )
+  useFocusEffect(useCallback(() => sync(), [sync]))
+  useOnTurnEnd(sessionID, () => {
+    if (directory) void usePrStore.getState().load(directory, { refresh: true })
+  })
+  const pending = !!forge && pr?.state === "open" && pr.checks === "pending"
+  useFocusEffect(
+    useCallback(() => {
+      if (!directory || !pending) return
+      const timer = setInterval(() => {
+        if (AppState.currentState === "active") void usePrStore.getState().load(directory)
+      }, POLL_MS)
+      return () => clearInterval(timer)
+    }, [directory, pending]),
+  )
+
+  const view = prView({ ready: prReady(info, branch), pr, action, busy, checking: entry?.refreshing })
   if (!view || !info?.branch) return undefined
-  return { info: { ...info, branch: info.branch }, pr, view }
+  return { info: { ...info, branch: info.branch }, pr, view, forge: !!forge, sync }
 }
 
 const COLORS: Record<PrTone, string> = {
@@ -108,7 +147,9 @@ interface MenuProps {
 
 export function PrMenu({ model, height, isDark, onClose, onSend }: MenuProps) {
   const { t } = useTranslation()
-  const { info, pr, view } = model
+  const { info, pr, view, forge, sync } = model
+  // Fresh state while the menu is open (forge's 20 s cache is fine here).
+  useEffect(() => sync(), [sync])
   // Merge asks for a second tap instead of an Alert, which would also take focus.
   const [confirm, setConfirm] = useState(false)
   useEffect(() => {
@@ -117,7 +158,7 @@ export function PrMenu({ model, height, isDark, onClose, onSend }: MenuProps) {
 
   const send = (action: PrAction) => {
     onClose()
-    onSend(prPrompt(action, { branch: info.branch, base: info.default_branch, url: pr?.url }))
+    onSend(prPrompt(action, { branch: info.branch, base: info.default_branch, url: pr?.url, report: !forge }))
   }
 
   const create = {
@@ -144,7 +185,11 @@ export function PrMenu({ model, height, isDark, onClose, onSend }: MenuProps) {
       icon: "refresh-outline",
       label: t("chat.prButton.menu.refresh"),
       enabled: view.canRefresh,
-      onPress: () => send("status"),
+      onPress: () => {
+        if (!forge) return send("status")
+        onClose()
+        sync(true)
+      },
     },
     {
       key: "watch",

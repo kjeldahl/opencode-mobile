@@ -1,6 +1,7 @@
-// Pull request state for the chat's PR button, derived from the transcript
-// alone (no GitHub token in the app). The agent drives everything with the
-// `gh` CLI and ends each PR reply with a status line the app parses:
+// Pull request state for the chat's PR button. On forge the state comes from
+// GET /__forge/pr (lib/forge-pr.ts). On a plain opencode server it is derived
+// from the transcript alone (no GitHub token in the app): the agent drives
+// everything with the `gh` CLI and ends each PR reply with a status line:
 //
 //   PR_STATUS branch=feat url=https://github.com/o/r/pull/12 state=open checks=passing
 //
@@ -19,6 +20,9 @@ export interface PrStatus {
   state: PrState
   checks: PrChecks
   branch?: string
+  draft?: boolean
+  // Names of failed checks (forge only).
+  failing?: string[]
 }
 
 const MARKER = /^[ \t]*PR_STATUS\b(.*)$/gm
@@ -153,8 +157,10 @@ export function prView(input: {
   pr: PrStatus | undefined
   action: PrAction | undefined
   busy: boolean
+  // A direct status query (forge) is in flight.
+  checking?: boolean
 }): PrView | undefined {
-  const { ready, pr, action, busy } = input
+  const { ready, pr, action, busy, checking } = input
   if (!pr && !ready && !(busy && action === "create")) return undefined
   const open = pr?.state === "open"
   const idle = !busy
@@ -165,6 +171,7 @@ export function prView(input: {
     canMerge: idle && open && pr?.checks === "passing",
   }
   if (busy && action) return { ...view, label: RUNNING[action], tone: "busy" }
+  if (checking && pr) return { ...view, label: "checking", tone: "busy" }
   if (!pr) return { ...view, label: "create", tone: "neutral" }
   if (pr.state === "merged") return { ...view, label: "merged", tone: "merged" }
   if (pr.state === "closed") return { ...view, label: "closed", tone: "neutral" }
@@ -176,8 +183,12 @@ const REPORT = [
   "PR_STATUS branch=<branch> url=<pull request url> state=<open|merged|closed> checks=<pending|passing|failing|none>",
 ].join("\n")
 
-export function prPrompt(action: PrAction, input: { branch: string; base?: string; url?: string }): string {
-  const { branch, base, url } = input
+// `report: false` drops the status line: forge reads the state itself.
+export function prPrompt(
+  action: PrAction,
+  input: { branch: string; base?: string; url?: string; report?: boolean },
+): string {
+  const { branch, base, url, report = true } = input
   const target = url ?? `the pull request for branch \`${branch}\``
   const body: Record<PrAction, string> = {
     create: [
@@ -196,5 +207,6 @@ export function prPrompt(action: PrAction, input: { branch: string; base?: strin
     ].join("\n"),
     merge: `Merge ${target} with \`gh pr merge\` (squash if the repository allows it). Only merge when all required checks pass; otherwise do not merge and explain why.`,
   }
-  return `[pr:${action}]\n${body[action]}\n\n${REPORT}`
+  const head = `[pr:${action}]\n${body[action]}`
+  return report ? `${head}\n\n${REPORT}` : head
 }

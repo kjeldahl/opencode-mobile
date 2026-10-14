@@ -69,6 +69,7 @@
 //   node tests/fixtures/mock-opencode-server.ts --port 4097 --fail-auth
 //   node tests/fixtures/mock-opencode-server.ts --port 4098 --seed-sessions
 //   node tests/fixtures/mock-opencode-server.ts --port 4100 --seed-diff
+//   node tests/fixtures/mock-opencode-server.ts --port 4101 --forge-pr
 
 import http from "node:http"
 import { randomUUID } from "node:crypto"
@@ -103,6 +104,15 @@ export interface MockServerOptions {
    * depend on it landing first.
    */
   seedDiff?: boolean
+  /**
+   * Answer forge's GET /__forge/pr?directory=… (issue #15) with this body per
+   * directory: an unknown directory gets 400. Unset, the endpoint 404s like a
+   * plain opencode server does, which is the app's cue to fall back to the
+   * transcript. `--forge-pr` seeds FORGE_PR for DEFAULT_DIRECTORY.
+   */
+  forgePr?: Record<string, unknown>
+  /** /__forge/pr answers 503 + X-Forge-State: asleep (the endpoint never wakes it). */
+  forgeAsleep?: boolean
 }
 
 interface StoredSession {
@@ -153,6 +163,21 @@ export const DEFAULT_REPLY_TEXT = "Hello from the mock opencode server — activ
 // x-opencode-directory header (i.e. a connection added without an explicit
 // directory). Mirrors the real server's notion of a default/current workspace.
 export const DEFAULT_DIRECTORY = "/mock/project"
+
+// What --forge-pr answers for DEFAULT_DIRECTORY: an open PR with checks running.
+export const FORGE_PR = {
+  directory: DEFAULT_DIRECTORY,
+  branch: "forge/mock-branch",
+  pr: {
+    number: 71,
+    url: "https://github.com/mock/project/pull/71",
+    state: "open",
+    draft: false,
+    checks: "pending",
+    failing: [],
+  },
+  checked_at: 1791990000,
+}
 
 // Resolve the workspace directory a request is scoped to. Directory-scoped
 // clients (src/stores/connections.ts clientForDirectory(dir)) send the
@@ -213,6 +238,8 @@ export function createMockOpencodeServer(opts: MockServerOptions) {
     replyDelayMs = 300,
     seedSessions = false,
     seedDiff = false,
+    forgePr,
+    forgeAsleep = false,
   } = opts
 
   const sessions = new Map<string, StoredSession>()
@@ -630,6 +657,18 @@ export function createMockOpencodeServer(opts: MockServerOptions) {
       return
     }
 
+    // forge-only: PR state for one of the workspace's repos (issue #15).
+    if (method === "GET" && path === "/__forge/pr" && (forgePr || forgeAsleep)) {
+      if (forgeAsleep) {
+        res.setHeader("X-Forge-State", "asleep")
+        res.setHeader("Retry-After", "30")
+        return json(res, 503, { forge: { state: "asleep", workspace: "mock", wake_seconds: 15 } })
+      }
+      const answer = forgePr?.[url.searchParams.get("directory") ?? ""]
+      if (!answer) return json(res, 400, { error: "unknown directory" })
+      return json(res, 200, answer)
+    }
+
     const abortMatch = path.match(/^\/session\/([^/]+)\/abort$/)
     if (method === "POST" && abortMatch) {
       return json(res, 200, true)
@@ -660,13 +699,19 @@ export function createMockOpencodeServer(opts: MockServerOptions) {
   }
 }
 
-function parseArgs(argv: string[]): { port: number; failAuth: boolean; seedSessions: boolean; seedDiff: boolean } {
-  const opts = { port: 4096, failAuth: false, seedSessions: false, seedDiff: false }
+function parseArgs(argv: string[]): MockServerOptions & { failAuth: boolean; seedSessions: boolean; seedDiff: boolean } {
+  const opts: MockServerOptions & { failAuth: boolean; seedSessions: boolean; seedDiff: boolean } = {
+    port: 4096,
+    failAuth: false,
+    seedSessions: false,
+    seedDiff: false,
+  }
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === "--port") opts.port = Number(argv[++i])
     else if (argv[i] === "--fail-auth") opts.failAuth = true
     else if (argv[i] === "--seed-sessions") opts.seedSessions = true
     else if (argv[i] === "--seed-diff") opts.seedDiff = true
+    else if (argv[i] === "--forge-pr") opts.forgePr = { [DEFAULT_DIRECTORY]: FORGE_PR }
   }
   return opts
 }
