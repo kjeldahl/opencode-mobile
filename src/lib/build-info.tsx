@@ -6,7 +6,7 @@
 import { Linking, Text, type StyleProp, type TextStyle } from "react-native"
 import buildInfoJson from "./build-info.json"
 
-export interface BuildInfo {
+interface BuildInfo {
   repo: string
   pr: string
   sha: string
@@ -25,46 +25,28 @@ function parse(raw: unknown): BuildInfo {
   return { repo, pr, sha }
 }
 
-export const BUILD_INFO: BuildInfo = parse(buildInfoJson)
+const info = parse(buildInfoJson)
 
-export function prUrl(info: BuildInfo = BUILD_INFO): string {
-  return `${info.repo}/pull/${info.pr}`
-}
-
-export function commitUrl(info: BuildInfo = BUILD_INFO): string {
-  return `${info.repo}/commit/${info.sha}`
-}
-
-export function prLabel(info: BuildInfo = BUILD_INFO): string {
-  return info.pr ? `PR#${info.pr}` : ""
-}
-
-export function shaLabel(info: BuildInfo = BUILD_INFO): string {
-  return info.sha ? info.sha.slice(0, 7) : ""
-}
-
-export function buildStamp(info: BuildInfo = BUILD_INFO): string {
-  const pr = prLabel(info)
-  const sha = shaLabel(info)
-  return pr && sha ? `${pr} ${sha}` : ""
-}
-
-// Tappable in isolation so the version row itself can stay non-pressable.
-export function BuildStampLinks({ style }: { style?: StyleProp<TextStyle> }) {
-  if (!BUILD_INFO.pr || !BUILD_INFO.sha) return null
+function link(text: string, url: string, style?: StyleProp<TextStyle>) {
   return (
-    <Text style={style}>
-      <TextLink text={prLabel()} url={prUrl()} style={style} />
-      <Text style={style}> </Text>
-      <TextLink text={shaLabel()} url={commitUrl()} style={style} />
+    <Text
+      style={[style, { color: "#3b82f6", textDecorationLine: "underline" }]}
+      onPress={() => Linking.openURL(url)}
+    >
+      {text}
     </Text>
   )
 }
 
-function TextLink({ text, url, style }: { text: string; url: string; style?: StyleProp<TextStyle> }) {
+// PR# and short commit sha as tappable links in the version row, so a
+// side-loaded CI APK says which pull request it came from. Null (the row shows
+// only the version) unless this is a PR build with both stamped.
+export function BuildStampLinks({ style }: { style?: StyleProp<TextStyle> }) {
+  if (!info.pr || !info.sha) return null
   return (
-    <Text style={[style, { color: "#3b82f6", textDecorationLine: "underline" }]} onPress={() => Linking.openURL(url)}>
-      {text}
+    <Text style={style}>
+      {link(`PR#${info.pr}`, `${info.repo}/pull/${info.pr}`, style)}{" "}
+      {link(info.sha.slice(0, 7), `${info.repo}/commit/${info.sha}`, style)}
     </Text>
   )
 }

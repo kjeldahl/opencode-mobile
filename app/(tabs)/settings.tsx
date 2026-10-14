@@ -224,16 +224,15 @@ export default function SettingsScreen() {
           </View>
           <View style={styles.settingContent}>
             <Text style={[styles.settingLabel, isDark && styles.textDark]}>{t("settings.about.version")}</Text>
-            {/* Was hard-coded "1.0.0" — wrong for every build ever shipped, and the
-                one place a user could have checked what they are running while 64%
-                of the base sat on a four-week-old build (AGE-110). */}
+            {/* Released/main builds show the version exactly as before; PR builds
+                additionally stamp the PR# and commit (build-info.json) so a
+                side-loaded CI APK says which pull request it came from. */}
             <Text style={[styles.settingDescription, isDark && styles.metaDark]}>
-              {updateAvailable ? `${CURRENT_VERSION} → ${updateAvailable.version}` : CURRENT_VERSION}
+              {updateAvailable
+                ? `${CURRENT_VERSION} → ${updateAvailable.version}`
+                : `${CURRENT_VERSION} · ${t("update.upToDate")}`}
             </Text>
-            {/* PR builds stamp the PR number and commit sha (build-info.json), so a
-                side-loaded APK says which CI artifact it came from. */}
             <BuildStampLinks style={styles.settingDescription} />
-
           </View>
           {updateAvailable && (
             <TouchableOpacity onPress={() => Linking.openURL(updateAvailable.url)}>
