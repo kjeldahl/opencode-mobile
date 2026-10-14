@@ -6,6 +6,7 @@ import { Markdown } from "../markdown"
 import { ToolCallCard } from "./ToolCallCard"
 import { WorkPane } from "./WorkPane"
 import { sameTurn, summarize, type Turn } from "../../lib/turns"
+import type { Part } from "../../lib/sdk"
 
 const SCREEN_WIDTH = Dimensions.get("window").width
 
@@ -14,21 +15,40 @@ interface Props {
   isDark: boolean
 }
 
-// One assistant turn: the work before the answer collapses to a single
-// summary line (tap -> WorkPane), reasoning hides behind a brain icon, and
-// only the answer text plus any running tool stays in full.
+// One summary line for a run of collapsed work; tap opens the WorkPane.
+function WorkSummary({ work, isDark }: { work: Part[]; isDark: boolean }) {
+  const { t } = useTranslation()
+  const [open, setOpen] = useState(false)
+  const items = summarize(work)
+  if (items.length === 0) return null
+
+  const summary = items.map((i) => t(`chat.turn.${i.key}${i.count === 1 ? "One" : "Many"}`, { count: i.count })).join(", ")
+  const failed = items.some((i) => i.key === "failed")
+  const muted = isDark ? "#888888" : "#666666"
+  return (
+    <>
+      <TouchableOpacity style={[s.summary, isDark && s.summaryDark]} onPress={() => setOpen(true)} activeOpacity={0.7} testID="turn-summary">
+        <Ionicons name="layers-outline" size={14} color={failed ? "#ef4444" : muted} />
+        <Text style={[s.summaryText, { color: muted }]} numberOfLines={1}>
+          {summary}
+        </Text>
+        <Ionicons name="chevron-forward" size={14} color={muted} />
+      </TouchableOpacity>
+      <WorkPane visible={open} title={summary} work={work} isDark={isDark} onClose={() => setOpen(false)} />
+    </>
+  )
+}
+
+// One assistant turn: work collapses to summary lines (tap -> WorkPane),
+// text the agent writes between tool calls splits those summaries, reasoning
+// hides behind a brain icon, and the answer plus any running tool stays in full.
 export const TurnBubble = memo(
   function TurnBubble({ turn, isDark }: Props) {
     const { t } = useTranslation()
-    const [paneOpen, setPaneOpen] = useState(false)
     const [thinkingOpen, setThinkingOpen] = useState(false)
 
-    const items = summarize(turn.work)
-    const summary = items.map((i) => t(`chat.turn.${i.key}${i.count === 1 ? "One" : "Many"}`, { count: i.count })).join(", ")
-    const failed = items.some((i) => i.key === "failed")
     const text = turn.final.map((p) => p.text).join("\n")
     const thinking = turn.thinking.map((p) => p.text).join("\n")
-    const muted = isDark ? "#888888" : "#666666"
 
     return (
       <View style={[s.bubble, isDark && s.bubbleDark]} testID="chat-bubble-assistant">
@@ -50,20 +70,16 @@ export const TurnBubble = memo(
           )}
         </View>
 
-        {summary.length > 0 && (
-          <TouchableOpacity
-            style={[s.summary, isDark && s.summaryDark]}
-            onPress={() => setPaneOpen(true)}
-            activeOpacity={0.7}
-            testID="turn-summary"
-          >
-            <Ionicons name="layers-outline" size={14} color={failed ? "#ef4444" : muted} />
-            <Text style={[s.summaryText, { color: muted }]} numberOfLines={1}>
-              {summary}
-            </Text>
-            <Ionicons name="chevron-forward" size={14} color={muted} />
-          </TouchableOpacity>
-        )}
+        {turn.segments.map((seg) => (
+          <View key={seg.id}>
+            <WorkSummary work={seg.work} isDark={isDark} />
+            {seg.text.length > 0 && (
+              <View style={[s.markdownWrap, s.note]} testID="turn-note">
+                <Markdown>{seg.text.map((p) => p.text).join("\n")}</Markdown>
+              </View>
+            )}
+          </View>
+        ))}
 
         {thinkingOpen && thinking.length > 0 && (
           <Text style={[s.thinking, isDark && s.thinkingDark]} selectable>
@@ -95,8 +111,6 @@ export const TurnBubble = memo(
             {turn.cost ? ` · $${turn.cost.toFixed(4)}` : ""}
           </Text>
         )}
-
-        <WorkPane visible={paneOpen} title={summary} work={turn.work} isDark={isDark} onClose={() => setPaneOpen(false)} />
       </View>
     )
   },
@@ -142,6 +156,7 @@ const s = StyleSheet.create({
   summaryText: { flex: 1, fontSize: 13 },
 
   markdownWrap: { marginHorizontal: -4 },
+  note: { marginBottom: 6 },
 
   tokens: { fontSize: 11, color: "#999999", marginTop: 8 },
   tokensDark: { color: "#666666" },
