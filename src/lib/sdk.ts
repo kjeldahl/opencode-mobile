@@ -7,6 +7,7 @@ import { buildRequestHeaders } from "./headers"
 import { SSEParser } from "./sse"
 import { apiErrorFor } from "./api-error"
 import { parseForgeState } from "./forge"
+import { forgePrPath, readForgePr, type ForgePr } from "./forge-pr"
 import { loadSessionList } from "./session-list"
 import type { FileRoot } from "./file-roots"
 
@@ -385,6 +386,20 @@ export function createClient(config: ClientConfig) {
         const query = new URLSearchParams({ mode })
         if (config.directory) query.set("directory", config.directory)
         return request<FileDiff[]>(config, `/vcs/diff?${query.toString()}`)
+      },
+    },
+
+    // forge-only endpoints (issue #15). A plain opencode server answers 404,
+    // which readForgePr turns into `supported: false`.
+    forge: {
+      pr: async (directory: string, refresh?: boolean): Promise<ForgePr> => {
+        const response = await fetchWithTimeout(`${config.baseUrl}${forgePrPath(directory, refresh)}`, {
+          headers: createHeaders(config),
+        })
+        const body = await response.text()
+        const waking = parseForgeState(response.status, response.headers, body)
+        if (waking) throw waking
+        return readForgePr(response.status, body)
       },
     },
 
