@@ -21,9 +21,9 @@ export function DiffView({ before, after, isDark }: Props) {
       <ScrollView
         {...WIDE_CONTENT_SCROLL_CONFIG}
         testID="diff-view-scroll"
-        onScrollBeginDrag={useScrollLock.getState().lock}
-        onScrollEndDrag={useScrollLock.getState().unlock}
-        onMomentumScrollEnd={useScrollLock.getState().unlock}
+        onTouchStart={useScrollLock.getState().lock}
+        onTouchEnd={useScrollLock.getState().unlock}
+        onTouchCancel={useScrollLock.getState().unlock}
       >
         <View>
           {lines.map((line, idx) => (

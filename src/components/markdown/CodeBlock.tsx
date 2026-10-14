@@ -33,9 +33,9 @@ export function CodeBlock({ code, language }: Props) {
         {...WIDE_CONTENT_SCROLL_CONFIG}
         testID="code-block-scroll"
         contentContainerStyle={styles.codeScroll}
-        onScrollBeginDrag={useScrollLock.getState().lock}
-        onScrollEndDrag={useScrollLock.getState().unlock}
-        onMomentumScrollEnd={useScrollLock.getState().unlock}
+        onTouchStart={useScrollLock.getState().lock}
+        onTouchEnd={useScrollLock.getState().unlock}
+        onTouchCancel={useScrollLock.getState().unlock}
       >
         <Text style={[styles.code, isDark && styles.codeDark]} selectable>
           {code}

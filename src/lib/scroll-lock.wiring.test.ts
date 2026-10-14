@@ -15,12 +15,12 @@ function read(relativePath: string): string {
   return readFileSync(path.join(dir, relativePath), "utf8")
 }
 
-test("inner horizontal ScrollViews lock the parent during drag", () => {
+test("inner horizontal ScrollViews lock the parent during touch", () => {
   for (const file of ["components/chat/DiffView.tsx", "components/markdown/CodeBlock.tsx"]) {
     const src = read(`../${file}`)
-    assert.match(src, /onScrollBeginDrag=\{useScrollLock\.getState\(\)\.lock\}/, `${file} must lock on drag begin`)
-    assert.match(src, /onScrollEndDrag=\{useScrollLock\.getState\(\)\.unlock\}/, `${file} must unlock on drag end`)
-    assert.match(src, /onMomentumScrollEnd=\{useScrollLock\.getState\(\)\.unlock\}/, `${file} must unlock on momentum end`)
+    assert.match(src, /onTouchStart=\{useScrollLock\.getState\(\)\.lock\}/, `${file} must lock on touch start`)
+    assert.match(src, /onTouchEnd=\{useScrollLock\.getState\(\)\.unlock\}/, `${file} must unlock on touch end`)
+    assert.match(src, /onTouchCancel=\{useScrollLock\.getState\(\)\.unlock\}/, `${file} must unlock on touch cancel`)
   }
 })
 
