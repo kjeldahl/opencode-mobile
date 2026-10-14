@@ -75,6 +75,16 @@ jobs:
       - name: Expo prebuild
         run: npx expo prebuild --platform android --no-install
 
+      # PR builds stamp the PR number and commit into src/lib/build-info.json so
+      # the About screen can link both; main/tag builds keep the empty placeholder.
+      - name: Stamp build info
+        if: github.event_name == 'pull_request'
+        env:
+          BUILD_INFO_REPO: ${{ github.server_url }}/${{ github.repository }}
+          BUILD_INFO_PR: ${{ github.event.pull_request.number }}
+          BUILD_INFO_SHA: ${{ github.event.pull_request.head.sha }}
+        run: node scripts/make-build-info.mjs
+
       - name: Setup signing
         # Every build (main pushes and v* tags alike) is signed with the one release keystore from the
         # repo secrets, so each APK installs over the previous one and keeps the app's data. Without
