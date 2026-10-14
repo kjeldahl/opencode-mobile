@@ -49,22 +49,20 @@ name: Demo mode - offline scripted walkthrough (no server, zero-server activatio
     text: ".*login button.*"
 - assertVisible:
     id: "chat-bubble-assistant"
-# The assistant's work (reasoning, tool calls) is folded into summary lines,
-# split by the intermediate text that stays in chat (src/lib/turns.ts);
-# tapping a summary opens its work pane. The first one holds the reasoning.
+# Tool calls fold into summary lines, split by the intermediate text that
+# stays in chat (src/lib/turns.ts); tapping a summary opens its work pane.
+# Reasoning outside tool runs sits behind the brain toggle.
 - assertVisible:
     id: "turn-summary"
 - assertVisible:
     text: ".*Searching for the file.*"
 - takeScreenshot: demo-S3_conversation
 - tapOn:
-    id: "turn-summary"
+    id: "turn-thinking-toggle"
 - assertVisible:
-    id: "work-pane"
-- assertVisible:
-    text: "Thinking"
+    text: ".*tap handler on the login button.*"
 - tapOn:
-    id: "work-pane-close"
+    id: "turn-thinking-toggle"
 # The edit tool sits in the last summary, after the second intermediate text.
 - tapOn:
     text: ".*edited a file.*"

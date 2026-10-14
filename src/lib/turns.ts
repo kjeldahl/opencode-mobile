@@ -27,7 +27,7 @@ export interface Turn {
   segments: Segment[]
   // Running/pending tools of the in-flight turn, shown in full.
   live: Part[]
-  // Reasoning right before the answer, behind the brain toggle.
+  // Reasoning outside tool runs, behind the brain toggle.
   thinking: Part[]
   // Trailing answer text, shown in chat.
   final: Part[]
@@ -82,14 +82,20 @@ export function buildTurn(entries: Entry[], busy: boolean): Turn {
   const head = flow.slice(0, cut)
   const tail = flow.slice(cut)
 
+  // Segments without tool calls hold only reasoning: no summary line, their
+  // reasoning joins the answer's behind the brain toggle.
+  const segments = split(head)
+  const tooled = (seg: Segment) => seg.work.some((p) => p.type === "tool")
+  const loose = segments.filter((seg) => !tooled(seg)).flatMap((seg) => seg.work)
+
   const messages = entries.map((e) => e.message)
   const last = messages[messages.length - 1]
   return {
     id: messages[0].id,
     messages,
-    segments: split(head.filter((p) => !(busy && pending(p)))),
+    segments: segments.map((seg) => ({ ...seg, work: tooled(seg) ? seg.work.filter((p) => !(busy && pending(p))) : [] })),
     live: busy ? head.filter(pending) : [],
-    thinking: tail.filter((p) => p.type === "reasoning"),
+    thinking: [...loose, ...tail.filter((p) => p.type === "reasoning")],
     final: tail.filter((p) => p.type === "text"),
     files: all.filter(isImage),
     tokens: messages.reduce((n, m) => n + (m.tokens ? m.tokens.input + m.tokens.output : 0), 0),

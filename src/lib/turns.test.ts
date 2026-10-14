@@ -99,6 +99,22 @@ test("empty text and step markers are ignored", () => {
   assert.deepEqual(turn.final.map((p) => p.id), ["t2"])
 })
 
+test("reasoning-only segments go behind the brain toggle, not a summary", () => {
+  const parts = [think("r1", "plan"), text("t1", "Looking."), think("r2", "how"), tool("x", "read", "completed"), think("r3", "done"), text("t2", "Answer")]
+  const turn = buildTurn([{ message: msg("a", "assistant"), parts }], false)
+  assert.deepEqual(work(turn), [[], ["r2", "x"]])
+  assert.deepEqual(notes(turn), [["t1"], []])
+  assert.deepEqual(turn.thinking.map((p) => p.id), ["r1", "r3"])
+})
+
+test("a running tool keeps its segment's reasoning in the work pane", () => {
+  const parts = [think("r", "try"), tool("x", "bash", "running")]
+  const turn = buildTurn([{ message: msg("a", "assistant"), parts }], true)
+  assert.deepEqual(work(turn), [["r"]])
+  assert.deepEqual(turn.live.map((p) => p.id), ["x"])
+  assert.deepEqual(turn.thinking, [])
+})
+
 test("summary counts tools, unique files, and failures", () => {
   const work = [
     tool("1", "edit", "error", { filePath: "README.md" }),
