@@ -84,7 +84,7 @@ export const MessageBubble = memo(
           </ScrollView>
         )}
 
-        {/* Reasoning (collapsible) */}
+        {/* Reasoning (inline if short, else collapsible) */}
         {reasoning.length > 0 && <ReasoningBlock text={reasoning} isDark={isDark} />}
 
         {/* Message text */}
