@@ -1,0 +1,14 @@
+v0.6.0
+
+- Add release workflow for minor-bump or custom version
+- Show short thoughts inline; title long ones by first line (#23)
+- fix(scroll): let wide diffs/code scroll horizontally inside the chat list (#16)
+- feat: tap session title to show full title + path (#19)
+- fix: two-line session header, location below title (#19)
+- feat: read PR state from forge /__forge/pr (issue #15)
+- fix: hide reasoning-only work summaries, show reasoning behind brain toggle (#17)
+- fix: show intermediate agent text in chat, split work summaries (#17)
+- feat: tell a workspace wake apart from an ordinary reconnect in the banner
+- fix: never show the previous server's sessions, and count down while waking
+- feat: show 'workspace waking' instead of a blocked connection (issue #10)
+- docs: explain reason for this fork at top of README
