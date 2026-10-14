@@ -13,7 +13,7 @@ interface Props {
 export function ReasoningBlock({ text, isDark, style }: Props) {
   const { t } = useTranslation()
   const [expanded, setExpanded] = useState(false)
-  const { short, title } = reasoningView(text)
+  const { short, title, body } = reasoningView(text)
 
   if (short && title)
     return (
@@ -35,14 +35,14 @@ export function ReasoningBlock({ text, isDark, style }: Props) {
     >
       <View style={s.header}>
         <Ionicons name="bulb-outline" size={14} color="#f59e0b" />
-        <Text style={[s.label, isDark && s.labelDark]} numberOfLines={1}>
+        <Text style={[s.label, isDark && s.labelDark]} numberOfLines={expanded ? undefined : 1}>
           {title || t("chat.reasoningBlock.label")}
         </Text>
         <Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={14} color={isDark ? "#666666" : "#999999"} />
       </View>
-      {expanded && (
+      {expanded && body.length > 0 && (
         <Text style={[s.text, isDark && s.textDark]} selectable>
-          {text}
+          {body}
         </Text>
       )}
     </TouchableOpacity>
