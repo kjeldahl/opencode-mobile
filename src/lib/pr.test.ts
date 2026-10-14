@@ -127,3 +127,23 @@ test("prPrompt tags the action and asks for the status line", () => {
   assert.ok(prPrompt("merge", { branch: "feat", url: URL }).includes(URL))
   assert.ok(prPrompt("watch", { branch: "feat" }).includes("branch `feat`"))
 })
+
+test("prPrompt leaves out the status line when forge reads the state", () => {
+  const prompt = prPrompt("watch", { branch: "feat", url: URL, report: false })
+  assert.ok(prompt.startsWith("[pr:watch]\n"))
+  assert.ok(!prompt.includes("PR_STATUS"))
+})
+
+test("prView shows a direct refresh as checking, only with a PR and while idle", () => {
+  const pr = { url: URL, number: 12, state: "open" as const, checks: "pending" as const }
+  assert.deepEqual(prView({ ready: false, pr, action: undefined, busy: false, checking: true }), {
+    label: "checking",
+    tone: "busy",
+    canCreate: false,
+    canRefresh: true,
+    canWatch: true,
+    canMerge: false,
+  })
+  assert.equal(prView({ ready: true, pr: undefined, action: undefined, busy: false, checking: true })?.label, "create")
+  assert.equal(prView({ ready: false, pr, action: "watch", busy: true, checking: true })?.label, "watching")
+})

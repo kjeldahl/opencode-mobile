@@ -204,7 +204,7 @@ export default function SessionScreen() {
     },
     [sendMessage, model, agent, variant, t],
   )
-  const pr = usePr(changesDir, messages || [], parts, isSending || sessionBusy)
+  const pr = usePr(changesDir, id, messages || [], parts, isSending || sessionBusy)
   const [prMenu, setPrMenu] = useState(false)
   // Toolbar top within the screen: the PR menu overlays everything above it.
   const [toolbarTop, setToolbarTop] = useState(0)
