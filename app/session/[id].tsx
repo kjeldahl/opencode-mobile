@@ -34,6 +34,7 @@ import {
   ImageAttachments,
   SessionInfo,
   SessionTitle,
+  SessionTitleFull,
   PrButton,
   PrMenu,
   usePr,
@@ -101,6 +102,7 @@ export default function SessionScreen() {
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [showInfo, setShowInfo] = useState(false)
   const [headerRightWidth, setHeaderRightWidth] = useState(0)
+  const [titleOpen, setTitleOpen] = useState(false)
   const [keyboard, setKeyboard] = useState(() => Keyboard.metrics() ?? null)
   const keyboardHeight = keyboard?.height ?? 0
 
@@ -664,7 +666,13 @@ export default function SessionScreen() {
         options={{
           title: currentSession?.title || t("session.titleFallback"),
           headerTitle: ({ children }) => (
-            <SessionTitle title={children} location={shortDir} isDark={isDark} right={headerRightWidth} />
+            <SessionTitle
+              title={children}
+              location={shortDir}
+              isDark={isDark}
+              right={headerRightWidth}
+              onPress={() => setTitleOpen((v) => !v)}
+            />
           ),
           headerRight: () => (
             <View style={s.headerRight} onLayout={(e) => setHeaderRightWidth(e.nativeEvent.layout.width)}>
@@ -715,6 +723,15 @@ export default function SessionScreen() {
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         keyboardVerticalOffset={keyboardVerticalOffset(Platform.OS, insets.top)}
       >
+        {titleOpen && (
+          <SessionTitleFull
+            title={currentSession?.title || t("session.titleFallback")}
+            directory={currentSession?.directory}
+            isDark={isDark}
+            onPress={() => setTitleOpen(false)}
+          />
+        )}
+
         {/* Session info pulldown */}
         <SessionInfo
           session={currentSession}
