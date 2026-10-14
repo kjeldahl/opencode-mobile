@@ -3,7 +3,7 @@
 // Uncaught errors still land in the in-memory log buffer, and therefore in any
 // diagnostic report the user chooses to share.
 
-import { log } from "./logbuffer"
+import { log } from "./logbuffer.ts"
 import type { DiagnosticReport } from "./diagnostics"
 
 export type Breadcrumb = {
@@ -13,7 +13,11 @@ export type Breadcrumb = {
   data?: Record<string, unknown>
 }
 
-export function addBreadcrumb(_crumb: Breadcrumb) {}
+export function addBreadcrumb(crumb: Breadcrumb) {
+  const level = crumb.level === "warning" ? "warn" : (crumb.level ?? "info")
+  const data = crumb.data ? ` ${JSON.stringify(crumb.data)}` : ""
+  log[level](crumb.category, crumb.message + data)
+}
 
 export function captureException(
   err: unknown,
