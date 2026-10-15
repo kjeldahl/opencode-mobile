@@ -32,7 +32,8 @@ See [`.agents/retro.md`](.agents/retro.md) for lessons from past tasks. Read ent
 
 React Native / Expo mobile client for opencode. Connects to an opencode server instance via HTTP + SSE for real-time updates.
 
-**Repo**: `dzianisv/opencode-mobile` (standalone, not part of opencode monorepo)
+**Repo**: `kjeldahl/opencode-mobile` (our fork — all development, issues, and CI work happens here, nowhere else)
+**Issues**: file all new issues on `kjeldahl/opencode-mobile`, not upstream — that is intentional (issues belong in our repo).
 **Package name**: `cc.agentlabs.opencode`
 
 ## Architecture
@@ -170,7 +171,7 @@ The correct Azure AI Services endpoint (with actual deployments) is:
 ### CI
 
 GitHub Actions workflow: `.github/workflows/cua-smoke.yml`
-Secrets required: `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT` (already set on `dzianisv/opencode-mobile`).
+Secrets required: `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT` — must be configured on this repo; verify with `gh secret list --repo kjeldahl/opencode-mobile`.
 
 **Triggers**: Runs on push to `main` (with path filters) AND on `v*` tags (releases).
 
@@ -216,7 +217,7 @@ Secrets stored in vault:
 - `SENTRY_ORG` — `vibetechnologies`
 - `SENTRY_PROJECT` — `opencode-mobile`
 
-These same secrets are set as GitHub Actions secrets on `dzianisv/opencode-mobile` for CI builds.
+These same secrets must be set as GitHub Actions secrets on `kjeldahl/opencode-mobile` for CI builds.
 
 **Do NOT store secrets in `.env` files committed to the repo.** `.env` is gitignored — local copy only.
 
@@ -245,15 +246,15 @@ npx -y @vibebrowser/cli@0.2.12 \
 
 ## GitHub Auth
 
-For pushes/gh CLI on this repo: `source ~/.env.d/github-dzianisv.env`
+For pushes/gh CLI on this repo: the sandbox `gh` is already authenticated for `kjeldahl/opencode-mobile` (no env file needed).
 
 ## Google Account
 
-**ALL Google operations** (Play Console, GCP Console, YouTube, Firebase, etc.) use **`vibeteaichnologies@gmail.com`** — the VIBE TECHNOLOGIES, LLC account. `dzianisvv@gmail.com` is the personal account and does NOT have access to the project GCP resources, Play Console, or YouTube channel. Always verify the active account in the top-right corner before making changes. If GCP console shows `dzianisvv@gmail.com`, switch accounts via the avatar menu.
+**ALL Google operations** (Play Console, GCP Console, YouTube, Firebase, etc.) use **`vibeteaichnologies@gmail.com`** — the VIBE TECHNOLOGIES, LLC account. No other Google account has access to the project's GCP resources, Play Console, or YouTube channel. Always verify the active account in the top-right corner before making changes; switch accounts via the avatar menu if it is not the VIBE one.
 
 ## Google Play Console
 
-- **Developer account**: VIBE TECHNOLOGIES, LLC (ID: `8842655543970815326`), Google login `vibeteaichnologies@gmail.com`. The `/u/N/` index is NOT stable — if a console URL bounces to accept-terms/create-developer-account you're on the wrong Google account (e.g. `dzianisvv@gmail.com` hits a ToS gate); use the developer-account chooser to reach VIBE.
+- **Developer account**: VIBE TECHNOLOGIES, LLC (ID: `8842655543970815326`), Google login `vibeteaichnologies@gmail.com`. The `/u/N/` index is NOT stable — if a console URL bounces to accept-terms/create-developer-account you're on the wrong Google account; use the developer-account chooser to reach VIBE.
 - **Rebrand (2026-05-30)**: package renamed `ai.opencode.mobile` → `cc.agentlabs.opencode`. **App IS live on Play Store internal track** (v0.4.6, versionCode 33). CI publishes updates automatically via the service account after the first manual upload was completed. CI `packageName` = `cc.agentlabs.opencode`. NOTE: CI publish build needs the "Purge stale generated sources" step (commit 67e4c1f) or cached old-package autolinking breaks compile.
 - **Legacy app (orphaned)**: `ai.opencode.mobile`, app ID `4975545755653045321` — published v19 to internal track (run 26662900471), superseded by the rebrand.
 - **Track**: Internal testing (no review required, up to 100 testers)
@@ -262,4 +263,4 @@ For pushes/gh CLI on this repo: `source ~/.env.d/github-dzianisv.env`
 ## Related Issues
 
 - Upstream: `anomalyco/opencode#10288`
-- Branch on upstream fork: `feat/android-backbone-10288` on `dzianisv/opencode`
+- Branch on the upstream fork: `feat/android-backbone-10288` (opencode monorepo fork)
