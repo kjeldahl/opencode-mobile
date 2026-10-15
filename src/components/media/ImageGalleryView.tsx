@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useRef } from "react"
-import { ActivityIndicator, Alert, Animated, Pressable, StyleSheet, Text, View } from "react-native"
+import { useMemo } from "react"
+import { Alert, Pressable, StyleSheet, Text, View } from "react-native"
 import { Gesture, GestureDetector } from "react-native-gesture-handler"
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated"
 import { Image } from "expo-image"
 import { Ionicons } from "@expo/vector-icons"
 import { router } from "expo-router"
@@ -86,34 +87,36 @@ export function ImageGalleryView() {
   )
 }
 
-// Pinch to zoom, double-tap toggle, one-finger pan while zoomed. No Modal and
-// no nested GestureHandlerRootView — the app root already provides the one
-// provider this needs, and both were part of the crash these gestures had.
+// Pinch to zoom, double-tap toggle, one-finger pan while zoomed.
+//
+// Why this is Reanimated-only: with react-native-reanimated 4,
+// babel-preset-expo applies the worklets plugin, which AUTO-WORKLETIZES every
+// callback chained on `Gesture.*`. Callbacks therefore run on the UI thread,
+// where plain JS objects are inaccessible: touching a react-native `Animated.Value`
+// (`setValue` / `__getValue`) or a hook ref from one crashes a release build
+// on the first touch (that was the zoom crash). Only shared values may be
+// touched here; reach JS via runOnJS/scheduleOnRN if that ever changes.
 function ZoomPane({ resolved, headers }: { resolved: string; headers?: Record<string, string> }) {
-  const scale = useRef(new Animated.Value(1)).current
-  const tx = useRef(new Animated.Value(0)).current
-  const ty = useRef(new Animated.Value(0)).current
-  const base = useRef({ s: 1, tx: 0, ty: 0 })
-
-  const reset = () => {
-    base.current = { s: 1, tx: 0, ty: 0 }
-    scale.setValue(1)
-    tx.setValue(0)
-    ty.setValue(0)
-  }
+  const scale = useSharedValue(1)
+  const offsetX = useSharedValue(0)
+  const offsetY = useSharedValue(0)
+  const savedScale = useSharedValue(1)
+  const savedX = useSharedValue(0)
+  const savedY = useSharedValue(0)
 
   const pinch = useMemo(
     () =>
       Gesture.Pinch()
         .onBegin(() => {
-          base.current = { s: current(scale), tx: current(tx), ty: current(ty) }
+          "worklet"
+          savedScale.value = scale.value
         })
-        .onUpdate((e) => {
-          const next = Math.min(Math.max(base.current.s * e.scale, 1), 4)
-          scale.setValue(next)
-          if (next === 1) {
-            tx.setValue(0)
-            ty.setValue(0)
+        .onUpdate((event) => {
+          "worklet"
+          scale.value = Math.min(Math.max(savedScale.value * event.scale, 1), 4)
+          if (scale.value === 1) {
+            offsetX.value = 0
+            offsetY.value = 0
           }
         }),
     [],
@@ -122,14 +125,16 @@ function ZoomPane({ resolved, headers }: { resolved: string; headers?: Record<st
   const pan = useMemo(
     () =>
       Gesture.Pan()
-        .maxPointers(1)
         .onBegin(() => {
-          base.current = { ...base.current, tx: current(tx), ty: current(ty) }
+          "worklet"
+          savedX.value = offsetX.value
+          savedY.value = offsetY.value
         })
-        .onUpdate((e) => {
-          if (current(scale) <= 1) return
-          tx.setValue(base.current.tx + e.translationX)
-          ty.setValue(base.current.ty + e.translationY)
+        .onUpdate((event) => {
+          "worklet"
+          if (scale.value <= 1) return
+          offsetX.value = savedX.value + event.translationX
+          offsetY.value = savedY.value + event.translationY
         }),
     [],
   )
@@ -139,41 +144,32 @@ function ZoomPane({ resolved, headers }: { resolved: string; headers?: Record<st
       Gesture.Tap()
         .numberOfTaps(2)
         .onStart(() => {
-          if (current(scale) > 1) reset()
-          else {
-            base.current = { s: 2.5, tx: 0, ty: 0 }
-            scale.setValue(2.5)
-            tx.setValue(0)
-            ty.setValue(0)
-          }
+          "worklet"
+          scale.value = withTiming(scale.value > 1 ? 1 : 2.5)
+          offsetX.value = withTiming(0)
+          offsetY.value = withTiming(0)
         }),
     [],
   )
 
-  const combined = useMemo(() => Gesture.Race(doubleTap, Gesture.Race(pinch, pan)), [])
+  // Double-tap wins over the pinch+pan pair; the pair is simultaneous so pan
+  // keeps working during a pinch.
+  const combined = useMemo(() => Gesture.Exclusive(doubleTap, Gesture.Simultaneous(pinch, pan)), [])
+
+  const zoomStyle = useAnimatedStyle(() => ({
+    flex: 1,
+    transform: [{ translateX: offsetX.value }, { translateY: offsetY.value }, { scale: scale.value }],
+  }))
 
   return (
     <GestureDetector gesture={combined}>
       <Animated.View style={styles.zoomWrap}>
-        <Animated.View
-          style={{
-            flex: 1,
-            transform: [
-              { translateX: tx },
-              { translateY: ty },
-              { scale },
-            ],
-          }}
-        >
+        <Animated.View style={zoomStyle}>
           <Image source={{ uri: resolved, headers }} style={StyleSheet.absoluteFill} contentFit="contain" />
         </Animated.View>
       </Animated.View>
     </GestureDetector>
   )
-}
-
-function current(value: Animated.Value): number {
-  return (value as unknown as { __getValue(): number }).__getValue()
 }
 
 const styles = StyleSheet.create({
