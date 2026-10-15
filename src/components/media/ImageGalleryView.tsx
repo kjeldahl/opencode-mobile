@@ -8,7 +8,7 @@ import { router } from "expo-router"
 import { useConnections } from "../../stores/connections"
 import { useMediaViewer } from "../../stores/media-viewer"
 import { mediaHeaders, mediaUrl, splitCrop } from "../../lib/media-url"
-import { copyImage, mediaActionsAvailable, saveImage, shareImage } from "../../lib/media-actions"
+import { mediaActionsAvailable, shareImage } from "../../lib/media-actions"
 
 // Full-screen gallery: "2/4" pager with chevrons, pinch/double-tap zoom with
 // pan, and copy/save/share of the authenticated image bytes.
@@ -29,14 +29,10 @@ export function ImageGalleryView() {
 
   const go = (delta: number) => setIndex(Math.max(0, Math.min(items.length - 1, index + delta)))
 
-  const act = (kind: "copy" | "save" | "share") => {
+  const act = () => {
     if (!image) return
-    const run = kind === "copy" ? copyImage(image.resolved, image.headers) : kind === "save" ? saveImage(image.resolved, image.headers) : shareImage(image.resolved, image.headers)
-    run.catch((error: unknown) =>
-      Alert.alert(
-        kind === "copy" ? "Could not copy" : kind === "save" ? "Could not save" : "Could not share",
-        error instanceof Error ? error.message : String(error),
-      ),
+    shareImage(image.resolved, image.headers).catch((error: unknown) =>
+      Alert.alert("Could not share", error instanceof Error ? error.message : String(error)),
     )
   }
 
@@ -48,17 +44,9 @@ export function ImageGalleryView() {
         </Pressable>
         <View style={styles.barRight}>
           {mediaActionsAvailable ? (
-            <>
-              <Pressable onPress={() => act("copy")} hitSlop={8} accessibilityRole="button" accessibilityLabel="Copy image" testID="viewer-copy">
-                <Ionicons name="copy-outline" size={22} color="#ffffff" />
-              </Pressable>
-              <Pressable onPress={() => act("save")} hitSlop={8} accessibilityRole="button" accessibilityLabel="Save to photo library" testID="viewer-save">
-                <Ionicons name="download-outline" size={22} color="#ffffff" />
-              </Pressable>
-              <Pressable onPress={() => act("share")} hitSlop={8} accessibilityRole="button" accessibilityLabel="Share image" testID="viewer-share">
-                <Ionicons name="share-outline" size={22} color="#ffffff" />
-              </Pressable>
-            </>
+            <Pressable onPress={act} hitSlop={8} accessibilityRole="button" accessibilityLabel="Share or save image" testID="viewer-share">
+              <Ionicons name="share-outline" size={22} color="#ffffff" />
+            </Pressable>
           ) : null}
           {items.length > 1 ? (
             <View style={styles.pager} testID="viewer-pager">
@@ -125,6 +113,8 @@ function ZoomPane({ resolved, headers }: { resolved: string; headers?: Record<st
   const pan = useMemo(
     () =>
       Gesture.Pan()
+        .activeOffsetX([-10, 10])
+        .activeOffsetY([-10, 10])
         .onBegin(() => {
           "worklet"
           savedX.value = offsetX.value
@@ -143,6 +133,7 @@ function ZoomPane({ resolved, headers }: { resolved: string; headers?: Record<st
     () =>
       Gesture.Tap()
         .numberOfTaps(2)
+        .maxDuration(250)
         .onStart(() => {
           "worklet"
           scale.value = withTiming(scale.value > 1 ? 1 : 2.5)
@@ -152,9 +143,11 @@ function ZoomPane({ resolved, headers }: { resolved: string; headers?: Record<st
     [],
   )
 
-  // Double-tap wins over the pinch+pan pair; the pair is simultaneous so pan
-  // keeps working during a pinch.
-  const combined = useMemo(() => Gesture.Exclusive(doubleTap, Gesture.Simultaneous(pinch, pan)), [])
+  // Race (not Exclusive): Exclusive held pinch/pan hostage until the double
+  // tap had finished failing, which is the "hold for a second" delay. In a
+  // race the tap loses as soon as the pan's ±10px offset trips, and wins
+  // over a lone finger that never moves.
+  const combined = useMemo(() => Gesture.Race(doubleTap, Gesture.Simultaneous(pinch, pan)), [])
 
   const zoomStyle = useAnimatedStyle(() => ({
     flex: 1,
