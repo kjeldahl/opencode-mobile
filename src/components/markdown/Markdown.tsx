@@ -1,8 +1,9 @@
-import { useMemo, type ReactNode } from "react"
+import { isValidElement, useMemo, type ReactNode } from "react"
 import { Linking, View, Text, useColorScheme, Platform, type ImageStyle, type StyleProp, type ViewStyle, type TextStyle } from "react-native"
 import { useMarkdown, Renderer } from "react-native-marked"
 import { CodeBlock } from "./CodeBlock"
-import { MarkdownImage } from "./MarkdownImage"
+import { MarkdownImage, MarkdownImageStrip } from "./MarkdownImage"
+import { GalleryContext, type GalleryItem } from "./gallery-context"
 
 // Overrides react-native-marked's text nodes to tweak codespan styling and
 // route fenced code to CodeBlock. All text stays `selectable` so assistant
@@ -11,7 +12,40 @@ import { MarkdownImage } from "./MarkdownImage"
 // spans the whole paragraph (not across paragraphs).
 // Previously dropped over facebook/react-native#46999 (selectable <Text> in
 // Android FlatList rows); reported fixed on RN 0.81 + new arch, which we run.
+function isImageElement(node: ReactNode): boolean {
+  return isValidElement(node) && node.type === MarkdownImage
+}
+
+// Everything a tapped image's viewer needs, in document order: our image
+// elements found inside the parsed blocks (strips contribute their row).
+function collectImages(node: ReactNode): GalleryItem[] {
+  if (!node) return []
+  if (Array.isArray(node)) return node.flatMap((child) => collectImages(child))
+  if (!isValidElement(node)) return []
+  const props = node.props as { uri?: string; alt?: string; images?: { uri: string; alt?: string }[]; children?: ReactNode }
+  if (node.type === MarkdownImage) return [{ raw: props.uri ?? "", alt: props.alt }]
+  if (node.type === MarkdownImageStrip) return (props.images ?? []).map((i) => ({ raw: i.uri, alt: i.alt }))
+  return collectImages(props.children)
+}
+
 class CustomRenderer extends Renderer {
+  // Adjacent images (one Markdown paragraph, i.e. consecutive lines) render
+  // as one horizontal strip instead of stacked blocks.
+  paragraph(children: ReactNode[], styles?: ViewStyle): ReactNode {
+    const flat = (Array.isArray(children) ? children : [children]).filter(Boolean) as ReactNode[]
+    const images = flat.filter(isImageElement)
+    if (images.length >= 2) {
+      const rest = flat.filter((child) => !images.includes(child))
+      return (
+        <View key={this.getKey()} style={styles}>
+          {rest}
+          <MarkdownImageStrip images={images.map((el) => (el as { props: { uri: string; alt?: string } }).props)} />
+        </View>
+      )
+    }
+    return super.paragraph(children, styles)
+  }
+
   private plainText(children: string | ReactNode[], styles?: StyleProp<TextStyle>): ReactNode {
     return (
       <Text key={this.getKey()} style={styles} selectable>
@@ -168,5 +202,13 @@ export function Markdown({ children }: Props) {
 
   if (!children?.trim()) return null
 
-  return <View style={{ backgroundColor: "transparent" }}>{elements}</View>
+  // Parsed elements are final here, so the gallery list each tapped image
+  // should page through is a pure function of them.
+  const gallery = useMemo(() => collectImages(elements), [elements])
+
+  return (
+    <View style={{ backgroundColor: "transparent" }}>
+      <GalleryContext.Provider value={gallery}>{elements}</GalleryContext.Provider>
+    </View>
+  )
 }

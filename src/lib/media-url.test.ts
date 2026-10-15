@@ -1,6 +1,6 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
-import { mediaHeaders, mediaUrl } from "./media-url.ts"
+import { mediaHeaders, mediaUrl, splitCrop } from "./media-url.ts"
 
 const BASE = "http://100.108.64.76:4096"
 const AUTH = { username: "opencode", password: "sekret" }
@@ -61,4 +61,22 @@ test("no auth header for data: URIs", () => {
 
 test("no auth header when the connection has no password", () => {
   assert.equal(mediaHeaders("/__forge/file?path=x.png", BASE, undefined), undefined)
+})
+
+test("crop fragment parses fractions out of the url", () => {
+  const { url, crop } = splitCrop("/__forge/file?path=/tmp/log.png#crop=0,0.1,1,0.4")
+  assert.equal(url, "/__forge/file?path=/tmp/log.png")
+  assert.deepEqual(crop, { x: 0, y: 0.1, w: 1, h: 0.4 })
+})
+
+test("crop fragment is stripped from the resolved url too", () => {
+  const resolved = mediaUrl("/__forge/file?path=/tmp/log.png#crop=0.5,0,0.5,1", BASE)
+  assert.equal(resolved, "http://100.108.64.76:4096/__forge/file?path=/tmp/log.png")
+})
+
+test("an out-of-bounds or malformed crop is ignored but stripped", () => {
+  assert.equal(splitCrop("/x.png#crop=0,0,2,1").crop, undefined)
+  assert.equal(splitCrop("/x.png#crop=0,0,1").crop, undefined)
+  assert.equal(splitCrop("/x.png#crop=abc").url, "/x.png")
+  assert.equal(splitCrop("/x.png#anything").url, "/x.png")
 })

@@ -1,64 +1,99 @@
-import { useEffect, useMemo, useState } from "react"
-import { Pressable, StyleSheet, Text, View, useColorScheme } from "react-native"
+import { useContext, useEffect, useMemo, useState } from "react"
+import { Pressable, ScrollView, StyleSheet, Text, View, useColorScheme, type ViewStyle } from "react-native"
 import { Image } from "expo-image"
 import { useConnections } from "../../stores/connections"
-import { mediaHeaders, mediaUrl } from "../../lib/media-url"
+import { mediaHeaders, mediaUrl, splitCrop, type Crop } from "../../lib/media-url"
+import { coverCrop, coverRegion, regionStyle } from "../../lib/media-crop"
 import { ImageViewer } from "../media/ImageViewer"
+import { GalleryContext } from "./gallery-context"
 
-// Cap very tall screenshots at a few bubbles of height; the aspect ratio
-// still decides the final box, contentFit keeps it undistorted.
+// Tall screenshots are center-cropped to this box unless the agent names a
+// region with the #crop=x,y,w,h fragment (see media-url / media-crop).
+const WIDE_BOX = 16 / 11
 const MAX_HEIGHT = 340
+const THUMB = 96
 
-interface Props {
-  uri: string
-  alt?: string
-  // Overrides the default "open full-screen" tap (used for linked images).
-  onPress?: () => void
+interface Loader {
+  resolved: string
+  headers?: Record<string, string>
+  failed: boolean
+  reload: number
+  retry: () => void
 }
 
-// One `![](...)` block from an assistant reply. Relative URLs (the forge
-// `/__forge/file` pattern) are resolved against the active connection and
-// carry its Basic-auth header; foreign hosts get the image without our auth.
-export function MarkdownImage({ uri, alt, onPress }: Props) {
-  const isDark = useColorScheme() === "dark"
+// Resolve + auth-gate a raw Markdown image url, with the "sleeping workspace
+// answered 503" retry the chat needs.
+function useMediaLoader(raw: string): Loader {
   const baseUrl = useConnections((s) => s.clientBase?.baseUrl)
   const auth = useConnections((s) => s.clientBase?.auth)
   const workspace = useConnections((s) => s.workspace)
 
-  const resolved = useMemo(() => mediaUrl(uri, baseUrl), [uri, baseUrl])
+  const bare = useMemo(() => splitCrop(raw).url, [raw])
+  const resolved = useMemo(() => mediaUrl(bare, baseUrl), [bare, baseUrl])
   const headers = useMemo(() => mediaHeaders(resolved, baseUrl, auth), [resolved, baseUrl, auth])
 
-  const [aspect, setAspect] = useState<number | undefined>(undefined)
   const [failed, setFailed] = useState(false)
   const [reload, setReload] = useState(0)
-  const [full, setFull] = useState(false)
-
-  useEffect(() => {
-    setAspect(undefined)
-    setFailed(false)
-  }, [resolved])
-
-  // A sleeping workspace answers 503 + Retry-After; when the store already
-  // knows it is starting up, retry quietly instead of blaming the image.
-  useEffect(() => {
-    if (!failed || !workspace) return
-    const delay = workspace.state === "waking" ? 5_000 : workspace.state === "asleep" ? 30_000 : 0
-    if (!delay) return
-    const timer = setTimeout(() => {
-      setFailed(false)
-      setReload((n) => n + 1)
-    }, delay)
-    return () => clearTimeout(timer)
-  }, [failed, workspace])
-
   const retry = () => {
     setFailed(false)
     setReload((n) => n + 1)
   }
 
+  useEffect(() => setFailed(false), [resolved])
+
+  // While the store reports the workspace waking/asleep, retry quietly
+  // instead of blaming the image (the 503 + Retry-After case).
+  useEffect(() => {
+    if (!failed || !workspace) return
+    const delay = workspace.state === "waking" ? 5_000 : workspace.state === "asleep" ? 30_000 : 0
+    if (!delay) return
+    const timer = setTimeout(retry, delay)
+    return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [failed, workspace])
+
+  return { resolved, headers, failed, reload, retry }
+}
+
+interface Props {
+  uri: string
+  alt?: string
+  // Overrides the default "open viewer" tap (used for linked images).
+  onPress?: () => void
+}
+
+export function MarkdownImage({ uri, alt, onPress }: Props) {
+  const isDark = useColorScheme() === "dark"
+  const loader = useMediaLoader(uri)
+  const agentCrop = useMemo(() => splitCrop(uri).crop, [uri])
+  const gallery = useContext(GalleryContext)
+
+  const [aspect, setAspect] = useState<number | undefined>(undefined)
+  const [failed, setFailed] = useState(false)
+  const [full, setFull] = useState(false)
+
+  useEffect(() => {
+    setAspect(undefined)
+    setFailed(false)
+  }, [loader.resolved])
+
+  const region = useMemo(() => {
+    if (!aspect) return undefined
+    if (agentCrop) return coverRegion(agentCrop, aspect, WIDE_BOX)
+    if (aspect < 1) return coverCrop(aspect, WIDE_BOX)
+    return undefined
+  }, [aspect, agentCrop])
+
+  const noteAspect = (event: { source?: { width?: number; height?: number } }) => {
+    const size = event.source
+    if (size && size.width && size.height) setAspect(size.width / size.height)
+  }
+
+  const items = gallery.length ? gallery : [{ raw: uri, alt }]
+
   const tap = () => {
     if (failed) {
-      retry()
+      loader.retry()
       return
     }
     if (onPress) {
@@ -68,29 +103,143 @@ export function MarkdownImage({ uri, alt, onPress }: Props) {
     setFull(true)
   }
 
-  if (failed) {
+  if (failed || loader.failed) {
     return (
-      <Pressable onPress={retry} style={[styles.box, styles.errorBox, isDark && styles.errorBoxDark]} accessibilityRole="button">
+      <Pressable
+        onPress={() => {
+          setFailed(false)
+          loader.retry()
+        }}
+        style={[styles.box, styles.errorBox, isDark && styles.errorBoxDark]}
+        accessibilityRole="button"
+      >
         <Text style={[styles.errorText, isDark && styles.errorTextDark]}>Image failed to load — tap to reload</Text>
       </Pressable>
     )
   }
 
   return (
-    <Pressable onPress={tap} style={styles.box} accessibilityRole="image" accessibilityLabel={alt || "Image"}>
-      <Image
-        key={reload}
-        source={{ uri: resolved, headers }}
-        style={[styles.image, aspect ? { aspectRatio: aspect } : undefined]}
-        contentFit="contain"
-        transition={120}
-        onLoad={(event) => {
-          const size = event.source
-          if (size && size.width > 0 && size.height > 0) setAspect(size.width / size.height)
-        }}
-        onError={() => setFailed(true)}
+    <Pressable
+      onPress={tap}
+      style={[
+        styles.box,
+        boxAspectStyle(region, aspect),
+      ]}
+      accessibilityRole="image"
+      accessibilityLabel={alt || "Image"}
+    >
+      {!aspect ? (
+        <Image
+          key={loader.reload}
+          source={{ uri: loader.resolved, headers: loader.headers }}
+          style={styles.image}
+          contentFit="contain"
+          transition={120}
+          onLoad={noteAspect}
+          onError={() => setFailed(true)}
+        />
+      ) : region ? (
+        <Image
+          key={loader.reload}
+          source={{ uri: loader.resolved, headers: loader.headers }}
+          style={[StyleSheet.absoluteFill, regionStyle(region)]}
+          contentFit="fill"
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        <Image
+          key={loader.reload}
+          source={{ uri: loader.resolved, headers: loader.headers }}
+          style={StyleSheet.absoluteFill}
+          contentFit="contain"
+          transition={120}
+          onError={() => setFailed(true)}
+        />
+      )}
+      <ImageViewer
+        visible={full}
+        items={items}
+        startIndex={Math.max(0, items.findIndex((i) => i.raw === uri))}
+        onClose={() => setFull(false)}
       />
-      <ImageViewer visible={full} uri={resolved} headers={headers} onClose={() => setFull(false)} />
+    </Pressable>
+  )
+}
+
+function boxAspectStyle(region: Crop | undefined, aspect?: number): ViewStyle | undefined {
+  if (region) return { aspectRatio: WIDE_BOX, minHeight: 72, maxHeight: MAX_HEIGHT }
+  if (aspect) return { aspectRatio: aspect, minHeight: 72, maxHeight: MAX_HEIGHT }
+  return undefined
+}
+
+// Two or more adjacent images render as a horizontal thumbnail strip.
+export function MarkdownImageStrip({ images }: { images: Props[] }) {
+  const isDark = useColorScheme() === "dark"
+  const gallery = useContext(GalleryContext)
+  const items = gallery.length ? gallery : images.map((i) => ({ raw: i.uri, alt: i.alt }))
+  const [viewer, setViewer] = useState(-1)
+
+  return (
+    <View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.strip} contentContainerStyle={styles.stripRow}>
+        {images.map((img, i) => (
+          <StripThumb key={`${img.uri}-${i}`} img={img} isDark={isDark} onOpen={() => setViewer(i)} />
+        ))}
+      </ScrollView>
+      <ImageViewer
+        visible={viewer >= 0}
+        items={items}
+        startIndex={Math.max(0, items.findIndex((it) => it.raw === images[Math.max(0, viewer)]?.uri))}
+        onClose={() => setViewer(-1)}
+      />
+    </View>
+  )
+}
+
+function StripThumb({ img, isDark, onOpen }: { img: Props; isDark: boolean; onOpen: () => void }) {
+  const loader = useMediaLoader(img.uri)
+  const agentCrop = useMemo(() => splitCrop(img.uri).crop, [img.uri])
+  const [aspect, setAspect] = useState<number | undefined>(undefined)
+  const [failed, setFailed] = useState(false)
+
+  useEffect(() => {
+    setAspect(undefined)
+    setFailed(false)
+  }, [loader.resolved])
+
+  const region = useMemo(() => {
+    if (!aspect) return undefined
+    if (agentCrop) return coverRegion(agentCrop, aspect, THUMB / 72)
+    return coverCrop(aspect, THUMB / 72)
+  }, [aspect, agentCrop])
+
+  return (
+    <Pressable
+      onPress={() => (failed ? loader.retry() : onOpen())}
+      style={[styles.thumb, failed && styles.thumbError, isDark && styles.thumbErrorDark]}
+      accessibilityRole="image"
+      accessibilityLabel={img.alt || "Image"}
+    >
+      {region ? (
+        <Image
+          key={loader.reload}
+          source={{ uri: loader.resolved, headers: loader.headers }}
+          style={[StyleSheet.absoluteFill, regionStyle(region)]}
+          contentFit="fill"
+        />
+      ) : (
+        <Image
+          key={loader.reload}
+          source={{ uri: loader.resolved, headers: loader.headers }}
+          style={StyleSheet.absoluteFill}
+          contentFit="cover"
+          onLoad={(event) => {
+            const size = event.source
+            if (size && size.width > 0 && size.height > 0) setAspect(size.width / size.height)
+          }}
+          onError={() => setFailed(true)}
+        />
+      )}
     </Pressable>
   )
 }
@@ -103,6 +252,11 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     backgroundColor: "rgba(128,128,128,0.12)",
     marginVertical: 4,
+  },
+  image: {
+    width: "100%",
+    minHeight: 80,
+    maxHeight: MAX_HEIGHT,
   },
   errorBox: {
     minHeight: 44,
@@ -123,9 +277,26 @@ const styles = StyleSheet.create({
   errorTextDark: {
     color: "#aaaaaa",
   },
-  image: {
-    width: "100%",
-    minHeight: 80,
-    maxHeight: MAX_HEIGHT,
+  strip: {
+    flexGrow: 0,
+    marginVertical: 4,
+  },
+  stripRow: {
+    gap: 8,
+  },
+  thumb: {
+    width: THUMB,
+    height: 72,
+    borderRadius: 8,
+    overflow: "hidden",
+    backgroundColor: "rgba(128,128,128,0.12)",
+  },
+  thumbError: {
+    borderWidth: 1,
+    borderColor: "rgba(128,128,128,0.35)",
+    borderStyle: "dashed",
+  },
+  thumbErrorDark: {
+    borderColor: "rgba(255,255,255,0.2)",
   },
 })
