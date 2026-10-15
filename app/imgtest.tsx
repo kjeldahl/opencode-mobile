@@ -1,4 +1,4 @@
-import { View, Text, Pressable } from "react-native"
+import { View, Text, Pressable, ScrollView } from "react-native"
 import { Image } from "expo-image"
 import { useState } from "react"
 import { imageError, imageLoad } from "../src/lib/image-diagnostics.ts"
@@ -14,6 +14,8 @@ type St = { ev: string; w: number; h: number }
 export default function ImgTest() {
   const [big, setBig] = useState<St>({ ev: "pending", w: 0, h: 0 })
   const [ctl, setCtl] = useState<St>({ ev: "pending", w: 0, h: 0 })
+  const [rkey, setRkey] = useState<St>({ ev: "pending", w: 0, h: 0 })
+  const [plain, setPlain] = useState<St>({ ev: "pending", w: 0, h: 0 })
   return (
     <View style={{ flex: 1, backgroundColor: "#101820", padding: 8, gap: 8 }}>
       <Pressable onPress={() => setBig({ ev: "pending", w: 0, h: 0 })}>
@@ -33,6 +35,37 @@ export default function ImgTest() {
         />
       </Pressable>
       <Text style={{ color: "#fff" }}>large: {big.ev} {big.w}x{big.h}</Text>
+      <Text style={{ color: "#fff" }}>chat-sim: 200x200 cover in horizontal ScrollView</Text>
+      <ScrollView horizontal contentContainerStyle={{ gap: 8 }}>
+        <Image
+          source={{ uri: LARGE }}
+          style={{ width: 200, height: 200, backgroundColor: "#e5e5e5" }}
+          contentFit="cover"
+          recyclingKey="imgtest-recycle"
+          onLoad={(e) => {
+            setRkey({ ev: "load", w: e.source.width, h: e.source.height })
+            imageLoad("imgtest-recycle", LARGE, e.source.width, e.source.height)
+          }}
+          onError={(e) => {
+            setRkey({ ev: e.error ?? "error", w: 0, h: 0 })
+            imageError("imgtest-recycle", LARGE, e.error)
+          }}
+        />
+        <Image
+          source={{ uri: LARGE }}
+          style={{ width: 200, height: 200, backgroundColor: "#e5e5e5" }}
+          contentFit="cover"
+          onLoad={(e) => {
+            setPlain({ ev: "load", w: e.source.width, h: e.source.height })
+            imageLoad("imgtest-plain", LARGE, e.source.width, e.source.height)
+          }}
+          onError={(e) => {
+            setPlain({ ev: e.error ?? "error", w: 0, h: 0 })
+            imageError("imgtest-plain", LARGE, e.error)
+          }}
+        />
+      </ScrollView>
+      <Text style={{ color: "#fff" }}>recycle: {rkey.ev} {rkey.w}x{rkey.h} | plain: {plain.ev} {plain.w}x{plain.h}</Text>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
         <Image
           source={{ uri: CONTROL }}
