@@ -1,4 +1,4 @@
-import { View, Text, Pressable, ScrollView } from "react-native"
+import { View, Text, ScrollView } from "react-native"
 import { Image } from "expo-image"
 import { useState } from "react"
 import { imageError, imageLoad } from "../src/lib/image-diagnostics.ts"
@@ -9,104 +9,45 @@ const LARGE = `data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAzgAAAcmCAIAAABCfZc
 const CONTROL =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
 
-type St = { ev: string; w: number; h: number }
-
 const CELLS = [
-  { k: "h-cover", fit: "cover" },
-  { k: "h-contain", fit: "contain" },
-  { k: "h-fill", fit: "fill" },
-  { k: "h-none", fit: "none" },
-  { k: "v-cover", fit: "cover" },
-  { k: "v-contain", fit: "contain" },
+  { k: "big-contain", fit: "contain", w: 150, h: 150 },
+  { k: "big-cover", fit: "cover", w: 150, h: 150 },
+  { k: "big-none", fit: "none", w: 150, h: 150 },
+  { k: "big-fill", fit: "fill", w: 150, h: 150 },
+  { k: "huge-cover", fit: "cover", w: 150, h: 305 },
+  { k: "huge-contain", fit: "contain", w: 150, h: 305 },
+  { k: "ctl-small", fit: "cover", w: 150, h: 150, small: true },
 ] as const
 
 export default function ImgTest() {
-  const [big, setBig] = useState<St>({ ev: "pending", w: 0, h: 0 })
-  const [ctl, setCtl] = useState<St>({ ev: "pending", w: 0, h: 0 })
-  const [rkey, setRkey] = useState<St>({ ev: "pending", w: 0, h: 0 })
-  const [plain, setPlain] = useState<St>({ ev: "pending", w: 0, h: 0 })
   const [fit, setFit] = useState<Record<string, string>>({})
   const mark = (k: string, v: string) => setFit((f) => ({ ...f, [k]: v }))
-  const cellsView = CELLS.map((c) => (
-    <Image
-      key={c.k}
-      source={{ uri: LARGE }}
-      style={{ width: 160, height: 160, backgroundColor: "#e5e5e5" }}
-      contentFit={c.fit}
-      onLoad={(e) => mark(c.k, "load " + e.source.width + "x" + e.source.height)}
-      onError={(e) => mark(c.k, e.error ?? "error")}
-    />
-  ))
+  const uri = (c: (typeof CELLS)[number]) => ("small" in c ? CONTROL : LARGE)
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: "#101820" }} contentContainerStyle={{ padding: 8, gap: 8 }}>
-      <Pressable onPress={() => setBig({ ev: "pending", w: 0, h: 0 })}>
-        <Image
-          source={{ uri: LARGE }}
-          style={{ width: "100%", aspectRatio: 824 / 1830, backgroundColor: "#333" }}
-          contentFit="contain"
-          recyclingKey="imgtest-large"
-          onLoad={(e) => {
-            setBig({ ev: "load", w: e.source.width, h: e.source.height })
-            imageLoad("imgtest-large", LARGE, e.source.width, e.source.height)
-          }}
-          onError={(e) => {
-            setBig({ ev: e.error ?? "error", w: 0, h: 0 })
-            imageError("imgtest-large", LARGE, e.error)
-          }}
-        />
-      </Pressable>
-      <Text style={{ color: "#fff" }}>large: {big.ev} {big.w}x{big.h}</Text>
-      <Text style={{ color: "#fff" }}>chat-sim: 200x200 cover in horizontal ScrollView</Text>
-      <ScrollView horizontal contentContainerStyle={{ gap: 8 }}>
-        <Image
-          source={{ uri: LARGE }}
-          style={{ width: 200, height: 200, backgroundColor: "#e5e5e5" }}
-          contentFit="cover"
-          recyclingKey="imgtest-recycle"
-          onLoad={(e) => {
-            setRkey({ ev: "load", w: e.source.width, h: e.source.height })
-            imageLoad("imgtest-recycle", LARGE, e.source.width, e.source.height)
-          }}
-          onError={(e) => {
-            setRkey({ ev: e.error ?? "error", w: 0, h: 0 })
-            imageError("imgtest-recycle", LARGE, e.error)
-          }}
-        />
-        <Image
-          source={{ uri: LARGE }}
-          style={{ width: 200, height: 200, backgroundColor: "#e5e5e5" }}
-          contentFit="cover"
-          onLoad={(e) => {
-            setPlain({ ev: "load", w: e.source.width, h: e.source.height })
-            imageLoad("imgtest-plain", LARGE, e.source.width, e.source.height)
-          }}
-          onError={(e) => {
-            setPlain({ ev: e.error ?? "error", w: 0, h: 0 })
-            imageError("imgtest-plain", LARGE, e.error)
-          }}
-        />
-      </ScrollView>
-      <Text style={{ color: "#fff" }}>recycle: {rkey.ev} {rkey.w}x{rkey.h} | plain: {plain.ev} {plain.w}x{plain.h}</Text>
-      <Text style={{ color: "#fff" }}>fit matrix: first 4 in horizontal ScrollView, last 2 plain View (160x160)</Text>
-      <ScrollView horizontal contentContainerStyle={{ gap: 8 }}>{cellsView.slice(0, 4)}</ScrollView>
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>{cellsView.slice(4)}</View>
-      <Text style={{ color: "#fff" }}>
-        {CELLS.map((c) => c.k + ": " + (fit[c.k] ?? "pending")).join(" | ")}
+    <ScrollView contentContainerStyle={{ padding: 12, gap: 10, backgroundColor: "#101820" }}>
+      <Text style={{ color: "#fff", fontSize: 13 }}>
+        {CELLS.map((c) => c.k + ": " + (fit[c.k] ?? "pending")).join("\n")}
       </Text>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-        <Image
-          source={{ uri: CONTROL }}
-          style={{ width: 48, height: 48, backgroundColor: "#333" }}
-          contentFit="cover"
-          onLoad={(e) => {
-            setCtl({ ev: "load", w: e.source.width, h: e.source.height })
-            imageLoad("imgtest-control", CONTROL, e.source.width, e.source.height)
-          }}
-          onError={() => setCtl({ ev: "error", w: 0, h: 0 })}
-        />
-        <Text style={{ color: "#fff" }}>control(1x1 red): {ctl.ev}</Text>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+        {CELLS.map((c) => (
+          <Image
+            key={c.k}
+            source={{ uri: uri(c) }}
+            style={{ width: c.w, height: c.h, backgroundColor: "#e5e5e5" }}
+            contentFit={c.fit}
+            recyclingKey={"img-" + c.k}
+            onLoad={(e) => {
+              mark(c.k, "load " + e.source.width + "x" + e.source.height)
+              imageLoad("imgtest-" + c.k, uri(c), e.source.width, e.source.height)
+            }}
+            onError={(e) => {
+              mark(c.k, e.error ?? "error")
+              imageError("imgtest-" + c.k, uri(c), e.error)
+            }}
+          />
+        ))}
       </View>
-      <Text style={{ color: "#9ab" }}>{"route: /imgtest - tap big image to remount - breadcrumbs: [image]"}</Text>
+      <Text style={{ color: "#9ab" }}>{"route: /imgtest | boxes use one large data: URI | breadcrumbs: [image]"}</Text>
     </ScrollView>
   )
 }
