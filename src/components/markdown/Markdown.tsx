@@ -16,6 +16,18 @@ function isImageElement(node: ReactNode): boolean {
   return isValidElement(node) && node.type === MarkdownImage
 }
 
+// Whitespace between the image lines (soft line breaks) must not survive into
+// the strip block — they rendered as invisible Text rows and pushed the
+// gallery far away from the text above it.
+function isWhitespaceNode(node: ReactNode): boolean {
+  if (typeof node === "string") return !node.trim()
+  if (isValidElement(node)) {
+    const props = node.props as { children?: ReactNode }
+    return props.children === undefined || (Array.isArray(props.children) ? props.children.every(isWhitespaceNode) : isWhitespaceNode(props.children))
+  }
+  return !node
+}
+
 // Everything a tapped image's viewer needs, in document order: our image
 // elements found inside the parsed blocks (strips contribute their row).
 function collectImages(node: ReactNode): GalleryItem[] {
@@ -35,7 +47,7 @@ class CustomRenderer extends Renderer {
     const flat = (Array.isArray(children) ? children : [children]).filter(Boolean) as ReactNode[]
     const images = flat.filter(isImageElement)
     if (images.length >= 2) {
-      const rest = flat.filter((child) => !images.includes(child))
+      const rest = flat.filter((child) => !images.includes(child) && !isWhitespaceNode(child))
       return (
         <View key={this.getKey()} style={styles}>
           {rest}
