@@ -1,7 +1,8 @@
 import { useMemo, type ReactNode } from "react"
-import { View, Text, useColorScheme, Platform, type StyleProp, type ViewStyle, type TextStyle } from "react-native"
+import { Linking, View, Text, useColorScheme, Platform, type ImageStyle, type StyleProp, type ViewStyle, type TextStyle } from "react-native"
 import { useMarkdown, Renderer } from "react-native-marked"
 import { CodeBlock } from "./CodeBlock"
+import { MarkdownImage } from "./MarkdownImage"
 
 // Overrides react-native-marked's text nodes to tweak codespan styling and
 // route fenced code to CodeBlock. All text stays `selectable` so assistant
@@ -17,6 +18,17 @@ class CustomRenderer extends Renderer {
         {children}
       </Text>
     )
+  }
+
+  // Images get our own renderer: relative URLs (forge /__forge/file pattern)
+  // resolve against the active connection with its auth header, foreign hosts
+  // load without auth, and a tap opens the full-screen viewer.
+  image(uri: string, alt?: string, _style?: ImageStyle, _title?: string): ReactNode {
+    return <MarkdownImage key={this.getKey()} uri={uri} alt={alt} />
+  }
+
+  linkImage(href: string, imageUrl: string, alt?: string, _style?: ImageStyle, _title?: string): ReactNode {
+    return <MarkdownImage key={this.getKey()} uri={imageUrl} alt={alt} onPress={() => Linking.openURL(href)} />
   }
 
   code(text: string, language?: string, containerStyle?: ViewStyle, _textStyle?: TextStyle) {
