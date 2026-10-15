@@ -3,21 +3,17 @@ import { View, Text, useColorScheme, Platform, type StyleProp, type ViewStyle, t
 import { useMarkdown, Renderer } from "react-native-marked"
 import { CodeBlock } from "./CodeBlock"
 
-// react-native-marked's base Renderer hardcodes `selectable` on every plain
-// text node it produces (text/strong/em/del/heading/codespan). On Android,
-// selectable <Text> nested inside a FlatList row has a long-standing,
-// still-unresolved RN bug (facebook/react-native#46999, a reopened
-// regression of #28952's fix) where the underlying view's selectable state
-// — and, per our own diff-scroll flow (issue #104), its exposure to the
-// accessibility tree Maestro/UiAutomator reads from — never gets applied
-// correctly. Chat messages here are rendered as rows of the session screen's
-// own FlatList (app/session/[id].tsx), so every markdown text node hits
-// this. Code content is still copyable via CodeBlock's explicit Copy
-// button, so dropping `selectable` on plain text costs little.
+// Overrides react-native-marked's text nodes to tweak codespan styling and
+// route fenced code to CodeBlock. All text stays `selectable` so assistant
+// replies can be long-pressed and copied with the native selection menu.
+// A paragraph's inline nodes nest inside one outer <Text>, so selection
+// spans the whole paragraph (not across paragraphs).
+// Previously dropped over facebook/react-native#46999 (selectable <Text> in
+// Android FlatList rows); reported fixed on RN 0.81 + new arch, which we run.
 class CustomRenderer extends Renderer {
   private plainText(children: string | ReactNode[], styles?: StyleProp<TextStyle>): ReactNode {
     return (
-      <Text key={this.getKey()} style={styles}>
+      <Text key={this.getKey()} style={styles} selectable>
         {children}
       </Text>
     )

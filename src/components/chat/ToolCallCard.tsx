@@ -159,7 +159,7 @@ function GlobGrepDetail({ input, output, isDark }: { input: unknown; output: unk
   return (
     <View style={s.detailSection}>
       {typeof pattern === "string" && (
-        <Text style={[s.detailMeta, isDark && s.detailMetaDark]}>
+        <Text style={[s.detailMeta, isDark && s.detailMetaDark]} selectable>
           {typeof path === "string"
             ? t("chat.toolCallCard.patternWithPath", { pattern, path })
             : t("chat.toolCallCard.patternOnly", { pattern })}
@@ -195,7 +195,7 @@ function TaskDetail({ input, isDark }: { input: unknown; isDark: boolean }) {
   const prompt = typeof input === "object" && input !== null ? (input as Record<string, unknown>).prompt : undefined
   return (
     <View style={s.detailSection}>
-      {typeof description === "string" && <Text style={[s.detailMeta, isDark && s.detailMetaDark]}>{description}</Text>}
+      {typeof description === "string" && <Text style={[s.detailMeta, isDark && s.detailMetaDark]} selectable>{description}</Text>}
       {typeof prompt === "string" && prompt.length > 0 && (
         <View style={[s.codeBlock, isDark && s.codeBlockDark, { marginTop: 6 }]}>
           <Text style={[s.codePre, isDark && s.codePteDark]} selectable numberOfLines={20}>
@@ -222,7 +222,7 @@ function TodoDetail({ input, isDark }: { input: unknown; isDark: boolean }) {
               size={16}
               color={done ? "#22c55e" : isDark ? "#666666" : "#999999"}
             />
-            <Text style={[s.todoText, isDark && s.todoTextDark, done && s.todoDone]} numberOfLines={2}>
+            <Text style={[s.todoText, isDark && s.todoTextDark, done && s.todoDone]} selectable numberOfLines={2}>
               {String(item.content || item.title || "")}
             </Text>
           </View>
