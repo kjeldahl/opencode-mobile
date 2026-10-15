@@ -96,3 +96,13 @@ Never repeat the same uid target more than 3 times.
 **Correct pattern**: when a 403/401 differs between "identity" endpoints and "resource-scoped" endpoints for the *same* token from the *same* origin, suspect the resource identifier (org slug, project slug, tenant id) before suspecting network/IP infrastructure. Test it directly: hardcode the known-good identifier in a throwaway CI step and compare status codes from the same runner in the same run — this isolates secret-value bugs from token/network bugs in one API call, no waiting on a second infra channel.
 
 **Time cost**: ~20 min from wake to fix, because the probe workflow escalated one variable at a time (egress IP → curl vs Node fetch → listing vs detail endpoint → hardcoded org) instead of jumping straight to the identifier-substitution test. Next time: when two endpoints on the same token/origin diverge in status code, test identifier substitution first — it's the cheapest experiment that can falsify "it's the network."
+
+## 2026-10-15: Markdown-images zoom crash — RN Animated inside gesture callbacks
+
+**Problem**: the image-viewer zoom crashed release builds the moment the image was touched; two "architectural" guesses (nested GestureHandlerRootView in a Modal, Modal-hosted gestures) cost three APK cycles before the code told the truth.
+
+**Mistake(s)**: wrote gesture callbacks against react-native `Animated.Value` (`setValue`/`__getValue`) and refs, then tried to diagnose by swapping containers. With reanimated 4, babel-preset-expo auto-workletizes every callback chained on `Gesture.*`, so they run on the UI thread where JS-thread objects (Animated values, refs, JS state) must not be touched — a release build dies at the first `onBegin`. Two container rewrites were dead ends because the *callback bodies* were the bug.
+
+**Correct pattern**: in any code that uses RNGH gestures, callbacks must be worklets over `useSharedValue` + `useAnimatedStyle`; never reference react-native `Animated`, refs, or setState from a chained gesture callback (use `runOnJS`/`scheduleOnRN` when a JS call is required). Reading the toolchain (which babel plugins apply) before shipping the first API usage would have saved the cycles.
+
+**Time cost**: ~3 APK builds + 1 diagnosis round (~1h of wall-clock feedback per cycle) lost before the cause was stated.
