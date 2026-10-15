@@ -4,7 +4,7 @@ import { Image } from "expo-image"
 import { useConnections } from "../../stores/connections"
 import { mediaHeaders, mediaUrl, splitCrop, type Crop } from "../../lib/media-url"
 import { coverCrop, coverRegion, regionStyle } from "../../lib/media-crop"
-import { ImageViewer } from "../media/ImageViewer"
+import { useMediaViewer } from "../../stores/media-viewer"
 import { GalleryContext } from "./gallery-context"
 
 // Tall screenshots are center-cropped to this box unless the agent names a
@@ -68,9 +68,9 @@ export function MarkdownImage({ uri, alt, onPress }: Props) {
   const agentCrop = useMemo(() => splitCrop(uri).crop, [uri])
   const gallery = useContext(GalleryContext)
 
+  const openViewer = useMediaViewer((s) => s.open)
   const [aspect, setAspect] = useState<number | undefined>(undefined)
   const [failed, setFailed] = useState(false)
-  const [full, setFull] = useState(false)
 
   useEffect(() => {
     setAspect(undefined)
@@ -100,7 +100,7 @@ export function MarkdownImage({ uri, alt, onPress }: Props) {
       onPress()
       return
     }
-    setFull(true)
+    openViewer(items, Math.max(0, items.findIndex((i) => i.raw === uri)))
   }
 
   if (failed || loader.failed) {
@@ -156,12 +156,6 @@ export function MarkdownImage({ uri, alt, onPress }: Props) {
           onError={() => setFailed(true)}
         />
       )}
-      <ImageViewer
-        visible={full}
-        items={items}
-        startIndex={Math.max(0, items.findIndex((i) => i.raw === uri))}
-        onClose={() => setFull(false)}
-      />
     </Pressable>
   )
 }
@@ -177,21 +171,17 @@ export function MarkdownImageStrip({ images }: { images: Props[] }) {
   const isDark = useColorScheme() === "dark"
   const gallery = useContext(GalleryContext)
   const items = gallery.length ? gallery : images.map((i) => ({ raw: i.uri, alt: i.alt }))
-  const [viewer, setViewer] = useState(-1)
+  const openViewer = useMediaViewer((s) => s.open)
+
+  const open = (i: number) => openViewer(items, Math.max(0, items.findIndex((it) => it.raw === images[i]?.uri)))
 
   return (
     <View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.strip} contentContainerStyle={styles.stripRow}>
         {images.map((img, i) => (
-          <StripThumb key={`${img.uri}-${i}`} img={img} isDark={isDark} onOpen={() => setViewer(i)} />
+          <StripThumb key={`${img.uri}-${i}`} img={img} isDark={isDark} onOpen={() => open(i)} />
         ))}
       </ScrollView>
-      <ImageViewer
-        visible={viewer >= 0}
-        items={items}
-        startIndex={Math.max(0, items.findIndex((it) => it.raw === images[Math.max(0, viewer)]?.uri))}
-        onClose={() => setViewer(-1)}
-      />
     </View>
   )
 }

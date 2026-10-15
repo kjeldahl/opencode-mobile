@@ -73,7 +73,14 @@
           "speechRecognitionPermission": "OpenCode uses speech recognition so you can dictate prompts to your AI coding agent hands-free."
         }
       ],
-      "expo-localization"
+      "expo-localization",
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "OpenCode saves images you view in chat to your photo library.",
+          "saveToPhotos": true
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

@@ -1,8 +1,11 @@
-// Save / share / copy for full-screen images. All native-only: the web build
-// hides these buttons (no file system or native share sheet there).
+// Native-only media actions for the chat image viewer: copy, save to the
+// device photo library, and share through the platform sheet. Every failure
+// is thrown with a readable message — the caller turns it into an alert, so
+// a button never spins silently.
 
 import { Platform } from "react-native"
 import * as Clipboard from "expo-clipboard"
+import * as MediaLibrary from "expo-media-library"
 import * as Sharing from "expo-sharing"
 import { File, Paths } from "expo-file-system"
 
@@ -29,24 +32,46 @@ export function filenameFrom(url: string): string {
 
 async function downloadToCache(url: string, headers?: Record<string, string>): Promise<File> {
   const file = new File(Paths.cache, `media-viewer-${filenameFrom(url)}`)
-  await File.downloadFileAsync(url, file, headers ? { headers } : undefined)
+  try {
+    await File.downloadFileAsync(url, file, headers ? { headers } : undefined)
+  } catch (error) {
+    throw new Error(`Could not download the image: ${error instanceof Error ? error.message : String(error)}`, {
+      cause: error,
+    })
+  }
   return file
 }
 
 function mimeFrom(name: string): string {
   const ext = name.split(".").pop()?.toLowerCase() ?? ""
-  return ({ png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", avif: "image/avif", bmp: "image/bmp" } as Record<string, string>)[ext] ?? "application/octet-stream"
+  return (
+    { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", avif: "image/avif", bmp: "image/bmp" } as Record<string, string>
+  )[ext] ?? "image/png"
 }
 
-// Copies the decoded bitmap to the system clipboard.
 export async function copyImage(url: string, headers?: Record<string, string>): Promise<void> {
   const file = await downloadToCache(url, headers)
   await Clipboard.setImageAsync(await file.base64())
 }
 
-// Downloads with auth and opens the platform sheet, which carries the
-// "Save to device"/Photos/Files entries as well as plain sharing.
+// Saves into the device gallery. The first attempt rides the photos access
+// MediaLibrary already has; if that fails, ask for read/write and retry once.
+export async function saveImage(url: string, headers?: Record<string, string>): Promise<void> {
+  const file = await downloadToCache(url, headers)
+  try {
+    await MediaLibrary.saveToLibraryAsync(file.uri)
+    return
+  } catch {
+    // fall through to the permission request below
+  }
+  const permission = await MediaLibrary.requestPermissionsAsync(true)
+  if (!permission.granted) throw new Error("Photo library permission was denied")
+  await MediaLibrary.saveToLibraryAsync(file.uri)
+}
+
 export async function shareImage(url: string, headers?: Record<string, string>): Promise<void> {
   const file = await downloadToCache(url, headers)
+  const available = await Sharing.isAvailableAsync()
+  if (!available) throw new Error("Sharing is not available on this device")
   await Sharing.shareAsync(file.uri, { mimeType: mimeFrom(file.name), dialogTitle: "Share image", UTI: "public.image" })
 }
