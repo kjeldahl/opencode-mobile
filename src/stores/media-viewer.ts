@@ -1,6 +1,6 @@
 import { router } from "expo-router"
 import { create } from "zustand"
-import type { GalleryItem } from "../components/markdown/gallery-context"
+import type { GalleryItem } from "../lib/markdown-gallery"
 
 interface MediaViewerState {
   items: GalleryItem[]

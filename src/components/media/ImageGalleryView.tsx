@@ -11,7 +11,7 @@ import { mediaHeaders, mediaUrl, splitCrop } from "../../lib/media-url"
 import { mediaActionsAvailable, shareImage } from "../../lib/media-actions"
 
 // Full-screen gallery: "2/4" pager with chevrons, pinch/double-tap zoom with
-// pan, and copy/save/share of the authenticated image bytes.
+// pan, and the share/save sheet for the authenticated image bytes.
 export function ImageGalleryView() {
   const items = useMediaViewer((s) => s.items)
   const index = useMediaViewer((s) => s.index)

@@ -1,9 +1,10 @@
-import { isValidElement, useMemo, type ReactNode } from "react"
+import { useMemo, type ReactNode } from "react"
 import { Linking, View, Text, useColorScheme, Platform, type ImageStyle, type StyleProp, type ViewStyle, type TextStyle } from "react-native"
 import { useMarkdown, Renderer } from "react-native-marked"
 import { CodeBlock } from "./CodeBlock"
 import { MarkdownImage, MarkdownImageStrip } from "./MarkdownImage"
-import { GalleryContext, type GalleryItem } from "./gallery-context"
+import { GalleryContext } from "./gallery-context"
+import { collectImages, isImageElement, isWhitespaceNode } from "../../lib/markdown-gallery"
 
 // Overrides react-native-marked's text nodes to tweak codespan styling and
 // route fenced code to CodeBlock. All text stays `selectable` so assistant
@@ -12,40 +13,12 @@ import { GalleryContext, type GalleryItem } from "./gallery-context"
 // spans the whole paragraph (not across paragraphs).
 // Previously dropped over facebook/react-native#46999 (selectable <Text> in
 // Android FlatList rows); reported fixed on RN 0.81 + new arch, which we run.
-function isImageElement(node: ReactNode): boolean {
-  return isValidElement(node) && node.type === MarkdownImage
-}
-
-// Whitespace between the image lines (soft line breaks) must not survive into
-// the strip block — they rendered as invisible Text rows and pushed the
-// gallery far away from the text above it.
-function isWhitespaceNode(node: ReactNode): boolean {
-  if (typeof node === "string") return !node.trim()
-  if (isValidElement(node)) {
-    const props = node.props as { children?: ReactNode }
-    return props.children === undefined || (Array.isArray(props.children) ? props.children.every(isWhitespaceNode) : isWhitespaceNode(props.children))
-  }
-  return !node
-}
-
-// Everything a tapped image's viewer needs, in document order: our image
-// elements found inside the parsed blocks (strips contribute their row).
-function collectImages(node: ReactNode): GalleryItem[] {
-  if (!node) return []
-  if (Array.isArray(node)) return node.flatMap((child) => collectImages(child))
-  if (!isValidElement(node)) return []
-  const props = node.props as { uri?: string; alt?: string; images?: { uri: string; alt?: string }[]; children?: ReactNode }
-  if (node.type === MarkdownImage) return [{ raw: props.uri ?? "", alt: props.alt }]
-  if (node.type === MarkdownImageStrip) return (props.images ?? []).map((i) => ({ raw: i.uri, alt: i.alt }))
-  return collectImages(props.children)
-}
-
 class CustomRenderer extends Renderer {
   // Adjacent images (one Markdown paragraph, i.e. consecutive lines) render
   // as one horizontal strip instead of stacked blocks.
   paragraph(children: ReactNode[], styles?: ViewStyle): ReactNode {
     const flat = (Array.isArray(children) ? children : [children]).filter(Boolean) as ReactNode[]
-    const images = flat.filter(isImageElement)
+    const images = flat.filter((child) => isImageElement(child, MarkdownImage))
     if (images.length >= 2) {
       const rest = flat.filter((child) => !images.includes(child) && !isWhitespaceNode(child))
       return (
@@ -216,7 +189,7 @@ export function Markdown({ children }: Props) {
 
   // Parsed elements are final here, so the gallery list each tapped image
   // should page through is a pure function of them.
-  const gallery = useMemo(() => collectImages(elements), [elements])
+  const gallery = useMemo(() => collectImages(elements, MarkdownImage, MarkdownImageStrip), [elements])
 
   return (
     <View style={{ backgroundColor: "transparent" }}>

@@ -42,17 +42,36 @@ function useMediaLoader(raw: string): Loader {
   useEffect(() => setFailed(false), [resolved])
 
   // While the store reports the workspace waking/asleep, retry quietly
-  // instead of blaming the image (the 503 + Retry-After case).
+  // instead of blaming the image (the 503 + Retry-After case). `retry` is
+  // stable (setState only), so [failed, workspace] covers the inputs.
   useEffect(() => {
     if (!failed || !workspace) return
     const delay = workspace.state === "waking" ? 5_000 : workspace.state === "asleep" ? 30_000 : 0
     if (!delay) return
     const timer = setTimeout(retry, delay)
     return () => clearTimeout(timer)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [failed, workspace])
+  }, [failed, workspace, retry])
 
   return { resolved, headers, failed, reload, retry }
+}
+
+// Per-render image state both the full block and the strip thumb need:
+// natural aspect, failure flag, and a reset whenever the resolved url moves.
+function useImageState(resolved: string) {
+  const [aspect, setAspect] = useState<number | undefined>(undefined)
+  const [failed, setFailed] = useState(false)
+
+  useEffect(() => {
+    setAspect(undefined)
+    setFailed(false)
+  }, [resolved])
+
+  const noteAspect = (event: { source?: { width?: number; height?: number } }) => {
+    const size = event.source
+    if (size && size.width && size.height) setAspect(size.width / size.height)
+  }
+
+  return { aspect, failed, setFailed, noteAspect }
 }
 
 interface Props {
@@ -69,13 +88,7 @@ export function MarkdownImage({ uri, alt, onPress }: Props) {
   const gallery = useContext(GalleryContext)
 
   const openViewer = useMediaViewer((s) => s.open)
-  const [aspect, setAspect] = useState<number | undefined>(undefined)
-  const [failed, setFailed] = useState(false)
-
-  useEffect(() => {
-    setAspect(undefined)
-    setFailed(false)
-  }, [loader.resolved])
+  const { aspect, failed, setFailed, noteAspect } = useImageState(loader.resolved)
 
   const region = useMemo(() => {
     if (!aspect) return undefined
@@ -83,11 +96,6 @@ export function MarkdownImage({ uri, alt, onPress }: Props) {
     if (aspect < 1) return coverCrop(aspect, WIDE_BOX)
     return undefined
   }, [aspect, agentCrop])
-
-  const noteAspect = (event: { source?: { width?: number; height?: number } }) => {
-    const size = event.source
-    if (size && size.width && size.height) setAspect(size.width / size.height)
-  }
 
   const items = gallery.length ? gallery : [{ raw: uri, alt }]
 
@@ -189,13 +197,7 @@ export function MarkdownImageStrip({ images }: { images: Props[] }) {
 function StripThumb({ img, isDark, onOpen }: { img: Props; isDark: boolean; onOpen: () => void }) {
   const loader = useMediaLoader(img.uri)
   const agentCrop = useMemo(() => splitCrop(img.uri).crop, [img.uri])
-  const [aspect, setAspect] = useState<number | undefined>(undefined)
-  const [failed, setFailed] = useState(false)
-
-  useEffect(() => {
-    setAspect(undefined)
-    setFailed(false)
-  }, [loader.resolved])
+  const { aspect, failed, setFailed, noteAspect } = useImageState(loader.resolved)
 
   const region = useMemo(() => {
     if (!aspect) return undefined
@@ -223,10 +225,7 @@ function StripThumb({ img, isDark, onOpen }: { img: Props; isDark: boolean; onOp
           source={{ uri: loader.resolved, headers: loader.headers }}
           style={StyleSheet.absoluteFill}
           contentFit="cover"
-          onLoad={(event) => {
-            const size = event.source
-            if (size && size.width > 0 && size.height > 0) setAspect(size.width / size.height)
-          }}
+          onLoad={noteAspect}
           onError={() => setFailed(true)}
         />
       )}

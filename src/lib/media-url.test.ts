@@ -1,6 +1,6 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
-import { mediaHeaders, mediaUrl, splitCrop } from "./media-url.ts"
+import { filenameFrom, mediaHeaders, mediaUrl, splitCrop } from "./media-url.ts"
 
 const BASE = "http://100.108.64.76:4096"
 const AUTH = { username: "opencode", password: "sekret" }
@@ -72,6 +72,13 @@ test("crop fragment parses fractions out of the url", () => {
 test("crop fragment is stripped from the resolved url too", () => {
   const resolved = mediaUrl("/__forge/file?path=/tmp/log.png#crop=0.5,0,0.5,1", BASE)
   assert.equal(resolved, "http://100.108.64.76:4096/__forge/file?path=/tmp/log.png")
+})
+
+test("filenameFrom prefers the path query, then the path segment", () => {
+  assert.equal(filenameFrom(`${BASE}/__forge/file?path=/home/agent/forge-media/log.png`), "log.png")
+  assert.equal(filenameFrom("https://cdn.example.com/img/a.jpg?v=2"), "a.jpg")
+  assert.equal(filenameFrom("not a url"), "not a url") // last "/" segment of a bare string
+  assert.equal(filenameFrom(""), "image.png")
 })
 
 test("an out-of-bounds or malformed crop is ignored but stripped", () => {

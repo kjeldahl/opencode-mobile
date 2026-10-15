@@ -3,8 +3,6 @@
 
 import type { Crop } from "./media-url.ts"
 
-export interface Region extends Crop {}
-
 // Center-cover: for an image of `aspect` (w/h) in a box of `boxAspect`,
 // the largest region that fills the box without distortion.
 export function coverCrop(aspect: number, boxAspect: number): Crop {

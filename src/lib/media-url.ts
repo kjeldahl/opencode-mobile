@@ -63,6 +63,25 @@ export function splitCrop(url: string): { url: string; crop?: Crop } {
   return crop ? { url: bare, crop } : { url: bare }
 }
 
+// Best-guess filename for downloading/caching/sharing. Forge urls carry the
+// real name in the ?path= query; other urls use the last path segment.
+export function filenameFrom(url: string): string {
+  try {
+    const parsed = new URL(url)
+    const path = parsed.searchParams.get("path")
+    if (path) {
+      const leaf = path.split("/").pop()
+      if (leaf) return leaf
+    }
+    const leaf = parsed.pathname.split("/").pop()
+    if (leaf) return leaf
+  } catch {
+    const leaf = url.split(/[?#]/)[0].split("/").pop()
+    if (leaf) return leaf
+  }
+  return "image.png"
+}
+
 // Only the Authorization header — an image GET needs no Content-Type.
 // Returns undefined when the URL is not on our connection's origin, so the
 // forge password can never leak to a third-party host.

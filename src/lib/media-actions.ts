@@ -6,27 +6,9 @@
 import { Platform } from "react-native"
 import * as Sharing from "expo-sharing"
 import { File, Paths } from "expo-file-system"
+import { filenameFrom } from "./media-url.ts"
 
 export const mediaActionsAvailable = Platform.OS !== "web"
-
-// The forge url keeps the real filename in the ?path= query; fall back to the
-// last path segment, then to a generic name.
-export function filenameFrom(url: string): string {
-  try {
-    const parsed = new URL(url)
-    const path = parsed.searchParams.get("path")
-    if (path) {
-      const leaf = path.split("/").pop()
-      if (leaf) return leaf
-    }
-    const leaf = parsed.pathname.split("/").pop()
-    if (leaf) return leaf
-  } catch {
-    const leaf = url.split(/[?#]/)[0].split("/").pop()
-    if (leaf) return leaf
-  }
-  return "image.png"
-}
 
 async function downloadToCache(url: string, headers?: Record<string, string>): Promise<File> {
   // The timestamp keeps repeated downloads distinct — the cache file of a
