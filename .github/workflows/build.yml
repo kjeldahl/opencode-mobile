@@ -46,6 +46,9 @@ jobs:
 
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
       - uses: actions/checkout@v6
 
@@ -137,6 +140,19 @@ jobs:
         with:
           name: app-release
           path: android/app/build/outputs/apk/release/app-release.apk
+
+      # Keep one always-current APK link on the PR page (the Artifacts section hides inside
+      # Checks > job details, so testers kept missing it). One marker-editable comment.
+      - name: Comment APK link on PR
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --marker apk-link --body \
+            "APK (arm64) for commit \`${HEAD_SHA:0:7}\`: [download on the run page](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) — expand **Artifacts** at the bottom and unzip \`app-release.zip\` for \`app-release.apk\`."
 
   # Release lint (lintVital: fatal issues only), split off the build job so it runs alongside it.
   lint:
