@@ -1,7 +1,10 @@
 import { useMemo, type ReactNode } from "react"
-import { View, Text, useColorScheme, Platform, type StyleProp, type ViewStyle, type TextStyle } from "react-native"
+import { Linking, View, Text, useColorScheme, Platform, type ImageStyle, type StyleProp, type ViewStyle, type TextStyle } from "react-native"
 import { useMarkdown, Renderer } from "react-native-marked"
 import { CodeBlock } from "./CodeBlock"
+import { MarkdownImage, MarkdownImageStrip } from "./MarkdownImage"
+import { GalleryContext } from "./gallery-context"
+import { collectImages, isImageElement, isWhitespaceNode } from "../../lib/markdown-gallery"
 
 // Overrides react-native-marked's text nodes to tweak codespan styling and
 // route fenced code to CodeBlock. All text stays `selectable` so assistant
@@ -11,12 +14,40 @@ import { CodeBlock } from "./CodeBlock"
 // Previously dropped over facebook/react-native#46999 (selectable <Text> in
 // Android FlatList rows); reported fixed on RN 0.81 + new arch, which we run.
 class CustomRenderer extends Renderer {
+  // Adjacent images (one Markdown paragraph, i.e. consecutive lines) render
+  // as one horizontal strip instead of stacked blocks.
+  paragraph(children: ReactNode[], styles?: ViewStyle): ReactNode {
+    const flat = (Array.isArray(children) ? children : [children]).filter(Boolean) as ReactNode[]
+    const images = flat.filter((child) => isImageElement(child, MarkdownImage))
+    if (images.length >= 2) {
+      const rest = flat.filter((child) => !images.includes(child) && !isWhitespaceNode(child))
+      return (
+        <View key={this.getKey()} style={styles}>
+          {rest}
+          <MarkdownImageStrip images={images.map((el) => (el as { props: { uri: string; alt?: string } }).props)} />
+        </View>
+      )
+    }
+    return super.paragraph(children, styles)
+  }
+
   private plainText(children: string | ReactNode[], styles?: StyleProp<TextStyle>): ReactNode {
     return (
       <Text key={this.getKey()} style={styles} selectable>
         {children}
       </Text>
     )
+  }
+
+  // Images get our own renderer: relative URLs (forge /__forge/file pattern)
+  // resolve against the active connection with its auth header, foreign hosts
+  // load without auth, and a tap opens the full-screen viewer.
+  image(uri: string, alt?: string, _style?: ImageStyle, _title?: string): ReactNode {
+    return <MarkdownImage key={this.getKey()} uri={uri} alt={alt} />
+  }
+
+  linkImage(href: string, imageUrl: string, alt?: string, _style?: ImageStyle, _title?: string): ReactNode {
+    return <MarkdownImage key={this.getKey()} uri={imageUrl} alt={alt} onPress={() => Linking.openURL(href)} />
   }
 
   code(text: string, language?: string, containerStyle?: ViewStyle, _textStyle?: TextStyle) {
@@ -156,5 +187,13 @@ export function Markdown({ children }: Props) {
 
   if (!children?.trim()) return null
 
-  return <View style={{ backgroundColor: "transparent" }}>{elements}</View>
+  // Parsed elements are final here, so the gallery list each tapped image
+  // should page through is a pure function of them.
+  const gallery = useMemo(() => collectImages(elements, MarkdownImage, MarkdownImageStrip), [elements])
+
+  return (
+    <View style={{ backgroundColor: "transparent" }}>
+      <GalleryContext.Provider value={gallery}>{elements}</GalleryContext.Provider>
+    </View>
+  )
 }
