@@ -17,3 +17,9 @@ export { SessionInfo } from "./SessionInfo"
 export { StatsGaugeButton } from "./StatsGaugeButton"
 export { PrButton, PrMenu, usePr, type PrModel } from "./PrButton"
 export { SessionTitle, SessionTitleFull } from "./SessionTitle"
+export {
+  ConnectionIndicator,
+  ConnectionReason,
+  useConnectionIndicator,
+} from "./ConnectionIndicator"
+export { CONNECTION_SLOT } from "./ConnectionIndicator"

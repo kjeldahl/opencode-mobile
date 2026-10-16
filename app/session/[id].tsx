@@ -36,6 +36,10 @@ import {
   StatsGaugeButton,
   SessionTitle,
   SessionTitleFull,
+  ConnectionIndicator,
+  ConnectionReason,
+  useConnectionIndicator,
+  CONNECTION_SLOT,
   PrButton,
   PrMenu,
   usePr,
@@ -221,12 +225,12 @@ export default function SessionScreen() {
   }, [id, changesDir, router])
   const [showScrollButton, setShowScrollButton] = useState(false)
 
-  // SSE reconnect banner
+  // Connection state now lives in the header (issue #35): one small icon that
+  // says which kind of drop it is, a tap for the reason, and a green check
+  // when the drop heals itself.
   const reconnectAttempts = useEvents((s) => s.reconnectAttempts)
   const workspace = useConnections((s) => s.workspace)
-  const banner = connectionBanner(workspace, reconnectAttempts)
-  const [showConnectedFlash, setShowConnectedFlash] = useState(false)
-  const prevReconnecting = useRef(false)
+  const connection = useConnectionIndicator(connectionBanner(workspace, reconnectAttempts), reconnectAttempts)
 
   // Voice input — transcript appends to the text input on completion
   const speech = useSpeech(
@@ -571,19 +575,6 @@ export default function SessionScreen() {
     if (!loadingMore) loadingTriggered.current = false
   }, [loadingMore])
 
-  // Detect reconnecting → stable transition for the "Connected ✓" flash.
-  // reconnectAttempts and lastDisconnectAt reset in the same set() call, so we
-  // can't use lastDisconnectAt alone; a useRef tracks the prior reconnecting state.
-  useEffect(() => {
-    const isReconnecting = reconnectAttempts > 0
-    if (prevReconnecting.current && !isReconnecting) {
-      setShowConnectedFlash(true)
-      const t = setTimeout(() => setShowConnectedFlash(false), 2000)
-      return () => clearTimeout(t)
-    }
-    prevReconnecting.current = isReconnecting
-  }, [reconnectAttempts])
-
   const handlePermissionReply = async (requestID: string, reply: "once" | "always" | "reject") => {
     if (!sessionClient || !sessionID) return
     // Snapshot for rollback
@@ -673,13 +664,22 @@ export default function SessionScreen() {
         options={{
           title: currentSession?.title || t("session.titleFallback"),
           headerTitle: ({ children }) => (
-            <SessionTitle
-              title={children}
-              location={shortDir}
-              isDark={isDark}
-              right={headerRightWidth}
-              onPress={() => setTitleOpen((v) => !v)}
-            />
+            <View style={s.headerTitleRow}>
+              <ConnectionIndicator
+                indicator={connection.indicator}
+                isDark={isDark}
+                expanded={connection.expanded}
+                onPress={connection.toggle}
+              />
+              <SessionTitle
+                title={children}
+                location={shortDir}
+                isDark={isDark}
+                right={headerRightWidth}
+                leading={CONNECTION_SLOT}
+                onPress={() => setTitleOpen((v) => !v)}
+              />
+            </View>
           ),
           headerRight: () => (
             <View style={s.headerRight} onLayout={(e) => setHeaderRightWidth(e.nativeEvent.layout.width)}>
@@ -758,27 +758,12 @@ export default function SessionScreen() {
           onChangesPress={openChanges}
         />
 
-        {/* The same drop can mean two different things — say which one. A
-            workspace that is starting is not a network retry, and "attempt 3"
-            while forge boots the sandbox is just noise (issue #10). */}
-        {banner.kind === "retrying" && (
-          <View style={[s.banner, s.bannerReconnecting]}>
-            <Text style={s.bannerText}>{t("session.banners.reconnecting", { attempt: banner.attempt })}</Text>
-          </View>
-        )}
-        {(banner.kind === "waking" || banner.kind === "stopped") && (
-          <View style={[s.banner, s.bannerReconnecting]}>
-            <Text style={s.bannerText}>
-              {t(banner.kind === "stopped" ? "session.banners.workspaceStopped" : "session.banners.workspaceWaking", {
-                seconds: banner.seconds,
-              })}
-            </Text>
-          </View>
-        )}
-        {showConnectedFlash && reconnectAttempts === 0 && (
-          <View style={[s.banner, s.bannerConnected]}>
-            <Text style={s.bannerText}>{t("session.banners.connected")}</Text>
-          </View>
+        {/* Tapping the header icon drops the reason here — the same drop can
+            mean two different things, and a workspace that is starting is not
+            a network retry (issue #10). It used to be a full-width banner,
+            which made a self-healing blip look like an error (issue #35). */}
+        {connection.expanded && (
+          <ConnectionReason indicator={connection.indicator} isDark={isDark} onDismiss={connection.close} />
         )}
 
         {/* Pending revert (from "Edit message") — offer a way back before it's
@@ -1193,6 +1178,7 @@ const s = StyleSheet.create({
   },
 
   // Header
+  headerTitleRow: { flexDirection: "row", alignItems: "center" },
   headerRight: { flexDirection: "row", alignItems: "center", gap: 8 },
   dirBadgeDark: { backgroundColor: "#1a1a1a" },
   changesChip: {
@@ -1207,14 +1193,13 @@ const s = StyleSheet.create({
   changesAdd: { fontSize: 12, fontWeight: "600", color: "#16a34a" },
   changesDel: { fontSize: 12, fontWeight: "600", color: "#dc2626" },
 
-  // SSE reconnect/connected banner
+  // Banner row the pending-revert chip below reuses (the connection state moved
+  // to the header indicator — see ConnectionIndicator).
   banner: {
     paddingHorizontal: 16,
     paddingVertical: 6,
     alignItems: "center",
   },
-  bannerReconnecting: { backgroundColor: "#92400e" },
-  bannerConnected: { backgroundColor: "#065f46" },
   bannerText: { color: "#ffffff", fontSize: 13, fontWeight: "500" },
 
   // Pending revert (edit message) banner

@@ -66,9 +66,6 @@
     },
     "banners": {
       "reconnecting": "Reconnecting… (attempt {{attempt}})",
-      "workspaceWaking": "Workspace starting… about {{seconds}}s",
-      "workspaceStopped": "Workspace stopped — start it from the forge hub",
-      "connected": "Connected ✓",
       "reverted": "Message reverted — resend to confirm",
       "undo": "Undo"
     },
@@ -115,6 +112,22 @@
     }
   },
   "connection": {
+    "indicator": {
+      "a11y": {
+        "none": "Connection",
+        "retrying": "Reconnecting",
+        "waking": "Waking workspace",
+        "stopped": "Workspace stopped",
+        "restored": "Connected"
+      },
+      "reason": {
+        "none": "Connection is healthy",
+        "retrying": "Reconnecting… attempt {{attempt}}",
+        "waking": "Workspace is waking (~{{seconds}}s)",
+        "stopped": "Server is stopped — start it from the forge hub",
+        "restored": "Connection restored"
+      }
+    },
     "shared": {
       "connectionType": "Connection Type",
       "types": {

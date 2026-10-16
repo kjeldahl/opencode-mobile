@@ -106,3 +106,13 @@ Never repeat the same uid target more than 3 times.
 **Correct pattern**: in any code that uses RNGH gestures, callbacks must be worklets over `useSharedValue` + `useAnimatedStyle`; never reference react-native `Animated`, refs, or setState from a chained gesture callback (use `runOnJS`/`scheduleOnRN` when a JS call is required). Reading the toolchain (which babel plugins apply) before shipping the first API usage would have saved the cycles.
 
 **Time cost**: ~3 APK builds + 1 diagnosis round (~1h of wall-clock feedback per cycle) lost before the cause was stated.
+
+## 2026-10-16: #35 — Reanimated flash looked "broken" in web screenshots; shot.mjs waits 800ms inside `shot()`
+
+**Problem**: the new header connection indicator's ~1.5s restored-check animation read as "the check is there at 150ms and gone by 500ms" across four screenshot passes, which started a rewrite of the animation (shared value → `withSequence` → `withTiming`) before any measurement was taken.
+
+**Mistake(s)**: drove the timing check entirely through `shot.mjs`'s `shot()` helper, which calls `page.waitForTimeout(800)` before every screenshot — so every "frame" was really t+800ms and the 1.5s window had already ended. Also read the animation's state off pixels (subagent looking for green dots) instead of off the DOM, which gave no timestamps and hid the fact that the layout slot was still 24px wide while the icon was invisible.
+
+**Correct pattern**: for anything time-based, measure the clock in JS — `page.getByTestId(...).evaluate(el => getComputedStyle(el).opacity + el.getClientRects()[0].width)` on a `[0,100,200,...,1600]ms` schedule, and log render transitions with `page.on("console")`. Reserve screenshots for composition/layout questions, and remember each one drifts +800ms. When a screenshot pass and a DOM probe disagree, trust the probe.
+
+**Time cost**: ~3 extra bundler+browser rounds (~10 min) spent chasing a regression that did not exist; the single DOM-probe run settled it in 30 seconds and showed the animation was correct from the start.

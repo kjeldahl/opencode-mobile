@@ -26,7 +26,13 @@ import { useCatalog } from "../../src/stores/catalog"
 import { useChanges, useHeadline } from "../../src/stores/changes"
 import type BottomSheet from "@gorhom/bottom-sheet"
 import type { Session, Project } from "../../src/lib/sdk"
-import { DirectorySwitcher, DirectoryBrowserSheet } from "../../src/components/chat"
+import {
+  ConnectionIndicator,
+  ConnectionReason,
+  useConnectionIndicator,
+  DirectorySwitcher,
+  DirectoryBrowserSheet,
+} from "../../src/components/chat"
 import { groupByDirectory } from "../../src/lib/session-grouping"
 import { UpdateBanner } from "../../src/components/UpdateBanner"
 import { nameOf } from "../../src/lib/path-utils"
@@ -205,6 +211,9 @@ export default function SessionsScreen() {
   // from it and keeps spinning past zero rather than freezing on "15 seconds"
   // for a workspace that is taking longer (issue #10).
   const [wakeLeft, setWakeLeft] = useState<number | null>(null)
+  // Same states as the session header (issue #35), surfaced here in the
+  // connection bar — the wake countdown below still owns the empty screen.
+  const connection = useConnectionIndicator(connectionBanner(workspace, reconnectAttempts), reconnectAttempts)
 
   useEffect(() => {
     if (!workspace || workspace.state === "off") {
@@ -518,8 +527,8 @@ export default function SessionsScreen() {
   // (~10-15s). That is not an error — say so, and say how long, instead of
   // showing a connection that looks broken (issue #10). A wake outranks a
   // retry: if the stream is down because the workspace is booting, "attempt 3"
-  // is the wrong thing to say. An already-populated list keeps its rows and
-  // gets the banner above it; an empty one is the screen.
+  // is the wrong thing to say. A list that already has rows keeps them and gets
+  // the header indicator (issue #35); an empty one makes the state the screen.
   const banner = connectionBanner(workspace, reconnectAttempts)
   const bannerMessage =
     banner.kind === "stopped"
@@ -610,7 +619,18 @@ export default function SessionsScreen() {
         testID="connection-status-bar"
       >
         <View style={styles.connectionInfo}>
-          <View style={[styles.connectionDot, { backgroundColor: "#22c55e" }]} testID="connection-status-dot" />
+          {/* A healthy connection is just the green dot; anything else gets the
+              same compact indicator the chat header uses (issue #35). */}
+          {connection.indicator.state === "none" ? (
+            <View style={[styles.connectionDot, { backgroundColor: "#22c55e" }]} testID="connection-status-dot" />
+          ) : (
+            <ConnectionIndicator
+              indicator={connection.indicator}
+              isDark={isDark}
+              expanded={connection.expanded}
+              onPress={connection.toggle}
+            />
+          )}
           <Text style={[styles.connectionName, isDark && styles.textDark]} numberOfLines={1}>
             {activeConnection.name}
           </Text>
@@ -632,11 +652,8 @@ export default function SessionsScreen() {
         </View>
       )}
 
-      {banner.kind !== "none" && (
-        <View style={styles.wakeBar} testID="connection-banner">
-          <ActivityIndicator size="small" color={isDark ? "#9ca3af" : "#6b7280"} />
-          <Text style={[styles.wakeText, isDark && styles.wakeTextDark]}>{bannerMessage}</Text>
-        </View>
+      {connection.expanded && (
+        <ConnectionReason indicator={connection.indicator} isDark={isDark} onDismiss={connection.close} />
       )}
 
       <UpdateBanner isDark={isDark} />
@@ -1032,23 +1049,6 @@ const styles = StyleSheet.create({
   errorText: {
     color: "#dc2626",
     fontSize: 14,
-  },
-  wakeBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    backgroundColor: "#eff6ff",
-    padding: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#dbeafe",
-  },
-  wakeText: {
-    color: "#1d4ed8",
-    fontSize: 14,
-    flex: 1,
-  },
-  wakeTextDark: {
-    color: "#93c5fd",
   },
   groupHeader: {
     flexDirection: "row",

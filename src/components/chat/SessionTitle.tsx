@@ -7,6 +7,9 @@ interface Props {
   // Width of the headerRight content; the native header doesn't shrink a
   // custom title, so cap it ourselves to keep it clear of the buttons.
   right: number
+  // Room taken by anything rendered in the same header row before the title
+  // (the connection indicator), so the cap stays honest.
+  leading?: number
   onPress?: () => void
 }
 
@@ -15,10 +18,10 @@ const LEFT = 72
 const GAP = 16
 
 // Two-line header title: session title on top, location as small text below (#19).
-export function SessionTitle({ title, location, isDark, right, onPress }: Props) {
+export function SessionTitle({ title, location, isDark, right, leading = 0, onPress }: Props) {
   const { width } = useWindowDimensions()
   const side = Math.max(LEFT, right + GAP)
-  const max = Platform.OS === "ios" ? width - 2 * side : width - LEFT - right - GAP * 2
+  const max = Platform.OS === "ios" ? width - 2 * side : width - LEFT - right - leading - GAP * 2
   return (
     <Pressable
       style={[s.container, { maxWidth: Math.max(max, 80) }]}
