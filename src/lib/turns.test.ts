@@ -39,7 +39,7 @@ test("consecutive assistant messages collapse into one turn per user message", (
   assert.deepEqual(turn.thinking.map((p) => p.id), ["r3"])
   assert.deepEqual(turn.final.map((p) => p.id), ["t3"])
   assert.deepEqual(turn.live, [])
-  assert.equal(turn.tokens, 17)
+  assert.equal(turn.tokens, 1)
   assert.equal(turn.cost, 0.5)
   assert.equal(turn.modelID, "m3")
 })
@@ -148,4 +148,16 @@ test("sameTurn compares by reference", () => {
   const edited = [{ message: entries[0].message, parts: [text("n", "ab"), ...parts] }]
   assert.ok(sameTurn(buildTurn(middle, false), buildTurn(middle, false)))
   assert.ok(!sameTurn(buildTurn(middle, false), buildTurn(edited, false)))
+})
+
+test("turn tokens count context growth, not re-sent input per step", () => {
+  const entries: Entry[] = [
+    { message: msg("u1", "user"), parts: [text("t0", "hi")] },
+    { message: msg("a1", "assistant", { tokens: { input: 1000, output: 10 } }), parts: [tool("x1", "read", "completed")] },
+    { message: msg("a2", "assistant", { tokens: { input: 1100, output: 20 } }), parts: [tool("x2", "read", "completed")] },
+    { message: msg("a3", "assistant", { tokens: { input: 1300, output: 30, reasoning: 5 } }), parts: [text("t3", "Done.")] },
+  ]
+  const row = buildRows(entries, false)[1]
+  assert.ok(row.kind === "turn")
+  assert.equal(row.turn.tokens, 300 + 35)
 })
