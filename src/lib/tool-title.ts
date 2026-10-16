@@ -134,6 +134,10 @@ export function toolTitle(tool: string | undefined, raw: unknown): string | unde
 
 // Card header title: server title unless generic, then heuristic, then tool name.
 export function cardTitle(tool: string | undefined, serverTitle: string | undefined, input: unknown): string | undefined {
+  if (tool === "bash") {
+    const desc = str(record(input), "description")
+    if (desc) return clip(desc)
+  }
   if (!isGeneric(serverTitle, tool)) return serverTitle
   return toolTitle(tool, input) ?? serverTitle ?? tool
 }

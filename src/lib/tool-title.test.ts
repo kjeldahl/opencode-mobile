@@ -26,6 +26,20 @@ test("cardTitle keeps descriptive server titles", () => {
   assert.equal(cardTitle("read", undefined, {}), "read")
 })
 
+test("cardTitle bash: description beats server title equal to command", () => {
+  assert.equal(cardTitle("bash", "npm test", { command: "npm test", description: "Run unit tests" }), "Run unit tests")
+})
+
+test("cardTitle bash: no description keeps server title", () => {
+  assert.equal(cardTitle("bash", "npm test", { command: "npm test" }), "npm test")
+  assert.equal(cardTitle("bash", "", { command: "npm test", description: "  " }), "Runs tests")
+})
+
+test("cardTitle other tools ignore description", () => {
+  assert.equal(cardTitle("edit", "src/a.ts", { description: "x" }), "src/a.ts")
+  assert.equal(cardTitle("grep", "", { pattern: "foo", description: "x" }), "Searches for foo")
+})
+
 test("isGeneric", () => {
   assert.ok(isGeneric(undefined, "bash"))
   assert.ok(isGeneric("Bash", "bash"))
