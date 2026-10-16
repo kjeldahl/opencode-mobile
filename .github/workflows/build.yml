@@ -150,6 +150,9 @@ jobs:
           FAST_FLAGS: ${{ (github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch') && '-Pandroid.enableResourceOptimizations=false' || '' }}
           CMAKE_C_COMPILER_LAUNCHER: ccache
           CMAKE_CXX_COMPILER_LAUNCHER: ccache
+          # The NDK is reinstalled every run, so its mtime changes; ccache's default compiler check
+          # (mtime) then missed on every compile (0/191 hits). The NDK version is pinned, so key on that.
+          CCACHE_COMPILERCHECK: string:ndk-27.1.12297006
         run: >-
           ./gradlew assembleRelease
           --build-cache
