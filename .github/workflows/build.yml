@@ -192,14 +192,35 @@ jobs:
         with:
           cache-read-only: false
 
+      # lintVitalRelease drags in the same JS bundle and native (CMake) tasks as the build, so it
+      # shares the Metro and ccache caches (same keys and env as the build job).
+      - uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: ccache-${{ runner.os }}-arm64
+          max-size: 500M
+
       - name: Install dependencies
         run: npm install --legacy-peer-deps
+
+      - name: Cache Metro transforms
+        uses: actions/cache@v5
+        with:
+          path: .metro-cache
+          key: metro-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.sha }}
+          restore-keys: |
+            metro-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
+            metro-${{ runner.os }}-
 
       - name: Expo prebuild
         run: npx expo prebuild --platform android --no-install
 
       - name: Lint
         working-directory: android
+        env:
+          METRO_CACHE_DIR: ${{ github.workspace }}/.metro-cache
+          CMAKE_C_COMPILER_LAUNCHER: ccache
+          CMAKE_CXX_COMPILER_LAUNCHER: ccache
+          CCACHE_COMPILERCHECK: string:ndk-27.1.12297006
         run: >-
           ./gradlew lintVitalRelease
           --build-cache
