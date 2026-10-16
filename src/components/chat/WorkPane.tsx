@@ -7,6 +7,7 @@ import { ToolCallCard } from "./ToolCallCard"
 import { ReasoningBlock } from "./ReasoningBlock"
 import { useScrollLock } from "../../stores/scroll-lock"
 import type { Part } from "../../lib/sdk"
+import { estimateTokens, formatTokens } from "../../lib/tokens"
 
 interface Props {
   visible: boolean
@@ -38,11 +39,30 @@ export function WorkPane({ visible, title, work, isDark, onClose }: Props) {
           </View>
           <ScrollView scrollEnabled={!scrollLocked} contentContainerStyle={s.list}>
             {work.map((part) => {
-              if (part.type === "tool") return <ToolCallCard key={part.id} tool={part} isDark={isDark} />
-              if (part.type === "reasoning") return <ReasoningBlock key={part.id} text={part.text || ""} isDark={isDark} style={s.reasoning} />
+              const count = formatTokens(estimateTokens(part))
+              const badge = (
+                <Text style={[s.tokens, isDark && s.tokensDark]} testID="work-pane-tokens">
+                  {t("chat.turn.tokens", { count })}
+                </Text>
+              )
+              if (part.type === "tool")
+                return (
+                  <View key={part.id}>
+                    <ToolCallCard tool={part} isDark={isDark} />
+                    {badge}
+                  </View>
+                )
+              if (part.type === "reasoning")
+                return (
+                  <View key={part.id}>
+                    <ReasoningBlock text={part.text || ""} isDark={isDark} style={s.reasoning} />
+                    {badge}
+                  </View>
+                )
               return (
                 <View key={part.id} style={s.note}>
                   <Markdown>{part.text || ""}</Markdown>
+                  {badge}
                 </View>
               )
             })}
@@ -73,4 +93,6 @@ const s = StyleSheet.create({
   // gaps are even; ReasoningBlock's own bottom margin is dropped here.
   reasoning: { marginTop: 8, marginBottom: 0 },
   note: { marginTop: 8, paddingHorizontal: 6 },
+  tokens: { alignSelf: "flex-end", marginTop: 2, paddingHorizontal: 6, fontSize: 11, color: "#999999" },
+  tokensDark: { color: "#666666" },
 })
