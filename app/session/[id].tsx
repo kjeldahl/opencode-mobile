@@ -33,6 +33,7 @@ import {
   VariantPicker,
   ImageAttachments,
   SessionInfo,
+  StatsGaugeButton,
   SessionTitle,
   SessionTitleFull,
   PrButton,
@@ -46,6 +47,7 @@ import { useEvents, refreshPending } from "../../src/stores/events"
 import { useConnections } from "../../src/stores/connections"
 import { connectionBanner } from "../../src/lib/connection-status"
 import { buildRows } from "../../src/lib/turns"
+import { contextUsage } from "../../src/lib/context"
 import { useAuth } from "../../src/stores/auth"
 import { useCatalog } from "../../src/stores/catalog"
 import { useSpeech } from "../../src/lib/speech"
@@ -180,6 +182,9 @@ export default function SessionScreen() {
   const questions = useEvents((s) => (sessionID ? s.questions[sessionID] : undefined)) || []
 
   const shortDir = getShortDir(currentSession?.directory)
+
+  // Context-window usage for the header stats gauge (issue #31)
+  const usagePercent = useMemo(() => contextUsage(messages || [], providers).percent, [messages, providers])
 
   // Branch/uncommitted change counts for this chat's repo; refreshed on focus
   // and whenever the agent finishes a turn.
@@ -692,13 +697,12 @@ export default function SessionScreen() {
                   </>
                 )}
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => setShowInfo((v) => !v)} hitSlop={8}>
-                <Ionicons
-                  name={showInfo ? "stats-chart" : "stats-chart-outline"}
-                  size={20}
-                  color={showInfo ? "#3b82f6" : isDark ? "#888888" : "#666666"}
-                />
-              </TouchableOpacity>
+              <StatsGaugeButton
+                percent={usagePercent}
+                active={showInfo}
+                isDark={isDark}
+                onPress={() => setShowInfo((v) => !v)}
+              />
             </View>
           ),
         }}

@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from "rea
 import { Ionicons } from "@expo/vector-icons"
 import { useTranslation } from "react-i18next"
 import type { Message, Session } from "../../lib/sdk"
+import { contextUsage } from "../../lib/context"
 import type { Provider } from "../../stores/catalog"
 import type { ChangeTotals } from "../../lib/changes"
 
@@ -63,33 +64,11 @@ export function SessionInfo({
   // Match TUI: last assistant message tokens (context window), cumulative cost
   const stats = useMemo(() => {
     let cost = 0
-    let last: Message | null = null
-
     for (const msg of messages) {
       if (msg.role !== "assistant") continue
       if (msg.cost) cost += msg.cost
-      if (msg.tokens && msg.tokens.output > 0) last = msg
     }
-
-    // Last assistant message token breakdown (what the TUI shows)
-    const tokens = last?.tokens
-    const input = tokens?.input || 0
-    const output = tokens?.output || 0
-    const reasoning = tokens?.reasoning || 0
-    const cacheRead = tokens?.cache?.read || 0
-    const cacheWrite = tokens?.cache?.write || 0
-    const total = input + output + reasoning + cacheRead + cacheWrite
-
-    // Find context limit from provider catalog
-    let context = 0
-    if (last?.providerID && last?.modelID) {
-      const provider = providers.find((p) => p.id === last!.providerID)
-      const model = provider?.models.find((m) => m.id === last!.modelID)
-      context = model?.limit?.context || 0
-    }
-    const percent = context > 0 ? Math.round((total / context) * 100) : 0
-
-    return { cost, input, output, reasoning, cacheRead, cacheWrite, total, percent, context }
+    return { cost, ...contextUsage(messages, providers) }
   }, [messages, providers])
 
   if (!visible) return null
