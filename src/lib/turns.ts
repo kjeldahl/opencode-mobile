@@ -72,11 +72,23 @@ function split(parts: Part[]): Segment[] {
 }
 
 /** Builds one turn from consecutive assistant entries. `busy` marks it in flight. */
-// New tokens only: cache reads are the re-sent context, so they're excluded.
-export function newTokens(m: Message): number {
+// Tokens the group added. Every step's input re-sends the whole context (some
+// providers don't split it into cache reads), so summing inputs re-counts it.
+// Context growth first -> last step covers earlier outputs and tool results;
+// the last step's own output/reasoning is added on top.
+function context(m: Message): number {
   const t = m.tokens
   if (!t) return 0
-  return t.input + t.output + (t.reasoning || 0) + (t.cache?.write || 0)
+  return t.input + (t.cache?.read || 0) + (t.cache?.write || 0)
+}
+
+export function newTokens(messages: Message[]): number {
+  const list = messages.filter((m) => m.tokens && m.tokens.output > 0)
+  const first = list[0]
+  const last = list[list.length - 1]
+  if (!first || !last?.tokens) return 0
+  const own = last.tokens.output + (last.tokens.reasoning || 0)
+  return Math.max(0, context(last) - context(first)) + own
 }
 
 export function buildTurn(entries: Entry[], busy: boolean): Turn {
@@ -105,7 +117,7 @@ export function buildTurn(entries: Entry[], busy: boolean): Turn {
     thinking: [...loose, ...tail.filter((p) => p.type === "reasoning")],
     final: tail.filter((p) => p.type === "text"),
     files: all.filter(isImage),
-    tokens: messages.reduce((n, m) => n + newTokens(m), 0),
+    tokens: newTokens(messages),
     cost: messages.reduce((n, m) => n + (m.cost || 0), 0),
     modelID: last.modelID,
   }
