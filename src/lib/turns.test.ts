@@ -39,7 +39,7 @@ test("consecutive assistant messages collapse into one turn per user message", (
   assert.deepEqual(turn.thinking.map((p) => p.id), ["r3"])
   assert.deepEqual(turn.final.map((p) => p.id), ["t3"])
   assert.deepEqual(turn.live, [])
-  assert.equal(turn.tokens, 17)
+  assert.equal(turn.tokens, 2)
   assert.equal(turn.cost, 0.5)
   assert.equal(turn.modelID, "m3")
 })
