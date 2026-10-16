@@ -12,7 +12,8 @@
     "sections": {
       "security": "Security",
       "notifications": "Notifications",
-      "about": "About"
+      "about": "About",
+      "aiSummaries": "AI summaries"
     },
     "security": {
       "biometricOpen": {
@@ -57,6 +58,19 @@
     "alerts": {
       "notificationsDisabledTitle": "Notifications Disabled",
       "notificationsDisabledMessage": "Enable notifications for OpenCode in your device settings to receive alerts."
+    },
+    "aiSummaries": {
+      "label": "AI tool summaries",
+      "description": "Short on-device titles for tool cards (~490 MB download)",
+      "downloading": "Downloading model… {{percent}}%",
+      "ready": "On-device model ready",
+      "error": "Download failed: {{message}}",
+      "retry": "Retry download",
+      "delete": "Delete model",
+      "always": {
+        "label": "Always use AI summaries",
+        "description": "Testing: skip built-in rules, summarize every tool call"
+      }
     }
   },
   "session": {

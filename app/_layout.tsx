@@ -16,6 +16,8 @@ import { AuthGate } from "../src/components/AuthGate"
 import { ErrorBoundary } from "../src/components/ErrorBoundary"
 import * as notifications from "../src/lib/notifications"
 import { installCrashLogging } from "../src/lib/sentry"
+import { useSummaries } from "../src/stores/summaries"
+import { useModel } from "../src/lib/local-llm"
 
 const queryClient = new QueryClient()
 
@@ -34,6 +36,8 @@ function RootLayout() {
     initAuth()
     loadConnections()
     useSettings.getState().load()
+    useSummaries.getState().load()
+    useModel.getState().refresh()
 
     // Connect notification preferences to the notification module
     notifications.configure(() => useSettings.getState().notifications)

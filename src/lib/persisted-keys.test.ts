@@ -32,6 +32,14 @@ const ALLOWED_PERSISTED_KEYS = new Map<string, string>([
   ["AUTH_SETTINGS_KEY", "biometric/app-lock preference"],
   ["COUNT_KEY", "store-review: launch counter"],
   ["ASKED_KEY", "store-review: already-prompted flag"],
+  ["key", "update-check: storage adapter (AsyncStorage); writes the last-check timestamp"],
+  ["DISMISSED_KEY", "update-check: version string the user dismissed"],
+  [
+    "SUMMARIES_KEY",
+    "tool card titles written by the on-device model (issue #30). Model-derived but DISPLAY-ONLY: rendered in the " +
+      "card header, never sent to the server or any model as context, so nothing can replay as an injected instruction. " +
+      "Keep it that way.",
+  ],
 ])
 
 const SRC = path.join(import.meta.dirname, "..")
@@ -51,7 +59,7 @@ test("every on-device write uses a reviewed key, never model-generated content",
 
   for (const file of sourceFiles(SRC)) {
     const code = fs.readFileSync(file, "utf8")
-    for (const match of code.matchAll(/SecureStore\.setItemAsync\(\s*([^,]+?)\s*,/g)) {
+    for (const match of code.matchAll(/(?:SecureStore\.setItemAsync|AsyncStorage\.setItem)\(\s*([^,]+?)\s*,/g)) {
       const key = match[1].trim()
       if (!ALLOWED_PERSISTED_KEYS.has(key)) {
         unknown.push(`${path.relative(SRC, file)}: ${key}`)
@@ -73,7 +81,7 @@ test("the allowlist itself stays live (no keys left behind after a refactor)", (
     .map((file) => fs.readFileSync(file, "utf8"))
     .join("\n")
   const used = new Set(
-    [...code.matchAll(/SecureStore\.setItemAsync\(\s*([^,]+?)\s*,/g)].map((match) => match[1].trim()),
+    [...code.matchAll(/(?:SecureStore\.setItemAsync|AsyncStorage\.setItem)\(\s*([^,]+?)\s*,/g)].map((match) => match[1].trim()),
   )
   const stale = [...ALLOWED_PERSISTED_KEYS.keys()].filter((key) => !used.has(key))
 

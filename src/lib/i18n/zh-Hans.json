@@ -12,7 +12,8 @@
     "sections": {
       "security": "安全",
       "notifications": "通知",
-      "about": "关于"
+      "about": "关于",
+      "aiSummaries": "AI 摘要"
     },
     "security": {
       "biometricOpen": {
@@ -57,6 +58,19 @@
     "alerts": {
       "notificationsDisabledTitle": "通知已关闭",
       "notificationsDisabledMessage": "请在设备设置中为 OpenCode 启用通知以接收提醒。"
+    },
+    "aiSummaries": {
+      "label": "AI 工具摘要",
+      "description": "在设备上为工具卡片生成简短标题（需下载约 490 MB）",
+      "downloading": "正在下载模型… {{percent}}%",
+      "ready": "设备端模型已就绪",
+      "error": "下载失败：{{message}}",
+      "retry": "重试下载",
+      "delete": "删除模型",
+      "always": {
+        "label": "始终使用 AI 摘要",
+        "description": "测试用：跳过内置规则，为每个工具调用生成摘要"
+      }
     }
   },
   "session": {

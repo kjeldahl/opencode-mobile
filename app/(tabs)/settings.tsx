@@ -25,6 +25,7 @@ import { CURRENT_VERSION, checkForUpdate, type AvailableUpdate } from "../../src
 import { BuildStampLinks } from "../../src/lib/build-info"
 
 import type { LocalePreference } from "../../src/lib/i18n/locale-resolve"
+import { localLlmSupported, useModel } from "../../src/lib/local-llm"
 function SettingRow({
   icon,
   label,
@@ -75,7 +76,9 @@ export default function SettingsScreen() {
   const { t } = useTranslation()
 
   const { settings, hasBiometrics, updateSettings, lock } = useAuth()
-  const { notifications, setNotification, locale, setLocale } = useSettings()
+  const { notifications, setNotification, locale, setLocale, aiSummaries, setAiSummaries, aiSummariesAlways, setAiSummariesAlways } =
+    useSettings()
+  const model = useModel()
   const [osGranted, setOsGranted] = useState<boolean | null>(null)
 
   // Settings is where a user goes to ask "what am I running?". Answer it, and if
@@ -208,6 +211,70 @@ export default function SettingsScreen() {
           </View>
         )}
       </SettingSection>
+
+      {localLlmSupported && (
+        <SettingSection title={t("settings.sections.aiSummaries")} isDark={isDark}>
+          <SettingRow
+            icon="sparkles"
+            label={t("settings.aiSummaries.label")}
+            description={
+              model.status === "downloading"
+                ? t("settings.aiSummaries.downloading", { percent: Math.round(model.progress * 100) })
+                : model.status === "error"
+                  ? t("settings.aiSummaries.error", { message: model.error })
+                  : model.status === "ready"
+                    ? t("settings.aiSummaries.ready")
+                    : t("settings.aiSummaries.description")
+            }
+            isDark={isDark}
+            right={
+              <Switch
+                value={aiSummaries}
+                onValueChange={(value) => {
+                  setAiSummaries(value)
+                  if (value) model.download()
+                }}
+                trackColor={{ false: "#767577", true: "#22c55e" }}
+              />
+            }
+          />
+          {aiSummaries && model.status === "error" && (
+            <SettingRow
+              icon="refresh"
+              label={t("settings.aiSummaries.retry")}
+              isDark={isDark}
+              onPress={model.download}
+              right={<Ionicons name="chevron-forward" size={20} color={isDark ? "#666666" : "#999999"} />}
+            />
+          )}
+          <SettingRow
+            icon="flask"
+            label={t("settings.aiSummaries.always.label")}
+            description={t("settings.aiSummaries.always.description")}
+            isDark={isDark}
+            right={
+              <Switch
+                value={aiSummariesAlways}
+                onValueChange={setAiSummariesAlways}
+                disabled={!aiSummaries}
+                trackColor={{ false: "#767577", true: "#22c55e" }}
+              />
+            }
+          />
+          {model.status === "ready" && (
+            <SettingRow
+              icon="trash"
+              label={t("settings.aiSummaries.delete")}
+              isDark={isDark}
+              onPress={() => {
+                setAiSummaries(false)
+                model.remove()
+              }}
+              right={<Ionicons name="chevron-forward" size={20} color={isDark ? "#666666" : "#999999"} />}
+            />
+          )}
+        </SettingSection>
+      )}
 
       <SettingSection title={t("settings.sections.about")} isDark={isDark}>
         <SettingRow

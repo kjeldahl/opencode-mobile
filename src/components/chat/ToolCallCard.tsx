@@ -1,4 +1,5 @@
 import { cardTitle } from "../../lib/tool-title"
+import { useToolSummary } from "../../lib/use-tool-summary"
 import { useState, useCallback } from "react"
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, ScrollView, Platform } from "react-native"
 import { Ionicons } from "@expo/vector-icons"
@@ -336,6 +337,7 @@ export function ToolCallCard({ tool, isDark }: Props) {
   const overflows = content > viewport + 1
   const icon = (tool.tool && TOOL_ICONS[tool.tool]) || "extension-puzzle-outline"
   const status = tool.state?.status || "pending"
+  const summary = useToolSummary(tool.id, tool.tool, tool.state?.title, tool.state?.input, status === "completed")
   const color = statusColor(status)
   const error = tool.state?.error?.message
   const elapsed = duration(tool.state?.time?.start, tool.state?.time?.end)
@@ -362,7 +364,7 @@ export function ToolCallCard({ tool, isDark }: Props) {
         <View style={s.headerLeft}>
           <Ionicons name={icon as any} size={16} color={color} />
           <Text style={[s.name, isDark && s.nameDark]} numberOfLines={1}>
-            {cardTitle(tool.tool, tool.state?.title, tool.state?.input) || t("chat.toolCallCard.fallbackTitle")}
+            {cardTitle(tool.tool, tool.state?.title, tool.state?.input, summary) || t("chat.toolCallCard.fallbackTitle")}
           </Text>
           {elapsed && <Text style={[s.elapsed, isDark && s.elapsedDark]}>{elapsed}</Text>}
         </View>

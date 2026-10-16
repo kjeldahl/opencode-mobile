@@ -108,6 +108,21 @@ export function bashTitle(command: string): string | undefined {
   }
 }
 
+// True when the tier 1 heuristics produce a real title (not just the clipped
+// raw command). Tier 2 (on-device model) only runs when this is false.
+export function hasHeuristic(tool: string | undefined, raw: unknown): boolean {
+  if (!tool) return false
+  const input = record(raw)
+  if (tool === "bash") {
+    if (str(input, "description")) return true
+    const command = str(input, "command")
+    return command !== undefined && bashTitle(command) !== undefined
+  }
+  if (tool === "grep" || tool === "glob") return str(input, "pattern") !== undefined
+  if (tool === "webfetch") return str(input, "url") !== undefined
+  return false
+}
+
 export function toolTitle(tool: string | undefined, raw: unknown): string | undefined {
   if (!tool) return undefined
   const input = record(raw)
@@ -132,8 +147,14 @@ export function toolTitle(tool: string | undefined, raw: unknown): string | unde
   return undefined
 }
 
-// Card header title: server title unless generic, then heuristic, then tool name.
-export function cardTitle(tool: string | undefined, serverTitle: string | undefined, input: unknown): string | undefined {
+// Card header title: server title unless generic, then tier 2 summary, then heuristic, then tool name.
+export function cardTitle(
+  tool: string | undefined,
+  serverTitle: string | undefined,
+  input: unknown,
+  summary?: string,
+): string | undefined {
   if (!isGeneric(serverTitle, tool)) return serverTitle
+  if (summary) return summary
   return toolTitle(tool, input) ?? serverTitle ?? tool
 }

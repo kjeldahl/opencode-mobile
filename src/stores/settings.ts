@@ -11,12 +11,16 @@ interface Settings {
   pageSize: number
   notifications: Record<Category, boolean>
   locale: LocalePreference
+  aiSummaries: boolean
+  aiSummariesAlways: boolean
 }
 
 const DEFAULTS: Settings = {
   pageSize: 25,
   notifications: { ...defaultPreferences },
   locale: "system",
+  aiSummaries: false,
+  aiSummariesAlways: false,
 }
 
 interface SettingsState extends Settings {
@@ -25,10 +29,18 @@ interface SettingsState extends Settings {
   setPageSize: (size: number) => Promise<void>
   setNotification: (category: Category, enabled: boolean) => Promise<void>
   setLocale: (locale: LocalePreference) => Promise<void>
+  setAiSummaries: (enabled: boolean) => Promise<void>
+  setAiSummariesAlways: (enabled: boolean) => Promise<void>
 }
 
 function snapshot(get: () => SettingsState): Settings {
-  return { pageSize: get().pageSize, notifications: get().notifications, locale: get().locale }
+  return {
+    pageSize: get().pageSize,
+    notifications: get().notifications,
+    locale: get().locale,
+    aiSummaries: get().aiSummaries,
+    aiSummariesAlways: get().aiSummariesAlways,
+  }
 }
 
 async function persist(settings: Settings) {
@@ -68,5 +80,15 @@ export const useSettings = create<SettingsState>((set, get) => ({
     set({ locale })
     setAppLocale(locale) // applies immediately
     await persist({ ...snapshot(get), locale })
+  },
+
+  setAiSummaries: async (aiSummaries) => {
+    set({ aiSummaries })
+    await persist({ ...snapshot(get), aiSummaries })
+  },
+
+  setAiSummariesAlways: async (aiSummariesAlways) => {
+    set({ aiSummariesAlways })
+    await persist({ ...snapshot(get), aiSummariesAlways })
   },
 }))

@@ -73,7 +73,8 @@
           "speechRecognitionPermission": "OpenCode uses speech recognition so you can dictate prompts to your AI coding agent hands-free."
         }
       ],
-      "expo-localization"
+      "expo-localization",
+      ["llama.rn", { "enableOpenCLAndHexagon": false }]
     ],
     "experiments": {
       "typedRoutes": true,
