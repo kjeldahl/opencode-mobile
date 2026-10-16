@@ -40,3 +40,18 @@ test("ToolCallCard taps only the header, not the code/diff", () => {
   assert.match(card, /<TouchableOpacity style=\{s\.header\} onPress=\{toggle\}/, "only the header toggles")
   assert.doesNotMatch(card, /<TouchableOpacity\s+style=\{\[\s*s\.card/, "the whole card must not be pressable")
 })
+
+test("ToolCallCard detail locks the parent while an overflowing detail is dragged (issue #38)", () => {
+  const card = read("../components/chat/ToolCallCard.tsx")
+  assert.match(card, /onTouchStart=\{overflows \? useScrollLock\.getState\(\)\.lock : undefined\}/)
+  assert.match(card, /onTouchEnd=\{useScrollLock\.getState\(\)\.unlock\}/)
+  assert.match(card, /onTouchCancel=\{useScrollLock\.getState\(\)\.unlock\}/)
+})
+
+test("subagent card shows the full prompt and the response (issue #38)", () => {
+  const card = read("../components/chat/ToolCallCard.tsx")
+  const task = card.slice(card.indexOf("function TaskDetail"), card.indexOf("function TodoDetail"))
+  assert.doesNotMatch(task, /numberOfLines/, "prompt must not be truncated")
+  assert.match(task, /taskResult\(output\)/, "response must be rendered")
+  assert.match(card, /<TaskDetail input=\{input\} output=\{output\}/)
+})

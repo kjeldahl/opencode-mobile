@@ -371,7 +371,8 @@
     "toolCallCard": {
       "fallbackTitle": "工具",
       "patternOnly": "模式：{{pattern}}",
-      "patternWithPath": "模式：{{pattern}}，路径：{{path}}"
+      "patternWithPath": "模式：{{pattern}}，路径：{{path}}",
+      "response": "回复"
     },
     "turn": {
       "assistant": "助手",

@@ -371,7 +371,8 @@
     "toolCallCard": {
       "fallbackTitle": "Tool",
       "patternOnly": "Pattern: {{pattern}}",
-      "patternWithPath": "Pattern: {{pattern}} in {{path}}"
+      "patternWithPath": "Pattern: {{pattern}} in {{path}}",
+      "response": "Response"
     },
     "turn": {
       "assistant": "Assistant",
