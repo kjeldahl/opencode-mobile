@@ -5,6 +5,7 @@ import { Ionicons } from "@expo/vector-icons"
 import { useTranslation } from "react-i18next"
 import type { Part } from "../../lib/sdk"
 import { DiffView } from "./DiffView"
+import { ParsedDiffView } from "./ParsedDiffView"
 import { Markdown } from "../markdown"
 import { useScrollLock } from "../../stores/scroll-lock"
 import { taskResult } from "../../lib/task-output"
@@ -105,6 +106,23 @@ function EditDetail({ input, output, isDark }: { input: unknown; output: unknown
   const old = typeof input === "object" && input !== null ? (input as Record<string, unknown>).oldString : undefined
   const replacement =
     typeof input === "object" && input !== null ? (input as Record<string, unknown>).newString : undefined
+
+  // A unified diff on the part (newer servers send one, and it is what the
+  // Changes view renders) beats re-diffing the two strings: it keeps the hunk
+  // headers and the unchanged runs the fold markers collapse.
+  const unified = typeof input === "object" && input !== null ? (input as Record<string, unknown>).diff : undefined
+  if (typeof unified === "string" && unified.includes("\n")) {
+    return (
+      <View style={s.detailSection}>
+        {typeof file === "string" && (
+          <Text style={[s.detailFile, isDark && s.detailFileDark]} selectable numberOfLines={2}>
+            {file}
+          </Text>
+        )}
+        <ParsedDiffView patch={unified} isDark={isDark} />
+      </View>
+    )
+  }
 
   // If we have old/new strings, show as diff
   if (typeof old === "string" && typeof replacement === "string") {

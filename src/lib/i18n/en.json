@@ -253,6 +253,8 @@
       "deleteFailedMessage": "Could not delete the session. Please try again.",
       "createFailedMessage": "Failed to create session. Check your connection and try again."
     },
+    "showcaseTitle": "Showcase — every card",
+    "showcaseSubtitle": "Static demo session, no server needed",
     "empty": {
       "noConnectionTitle": "No Connection",
       "noConnectionSubtitle": "Connect to a computer running opencode serve on your network or via Tailscale to get started.",
@@ -469,6 +471,11 @@
     "ctaSubtitle": "This was a scripted demo. Connect your own opencode server to do this for real.",
     "connectButton": "Connect your own server",
     "setupGuideLink": "How to set up a server"
+  },
+  "showcase": {
+    "banner": "Showcase — every card, no server connected",
+    "readOnly": "Demo — read-only, no server connected",
+    "connect": "Connect your own server"
   },
   "update": {
     "available": "Update available",
