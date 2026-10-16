@@ -229,30 +229,68 @@ Return file:line citations only.`),
           newString: "    <View style={styles.container}>\n      <Pressable\n        onPress={() => void handleLogin()}\n        disabled={submitting || disabled}\n        style={s.button}\n      >",
         },
       }),
-      tool("showcase-part-a2-apply", ids.a2, "apply_patch", 434, 448, {
-        status: "completed",
-        title: "Apply patch: src/auth/refresh.ts",
-        input: {
-          patch: md(`--- a/src/auth/refresh.ts
-+++ b/src/auth/refresh.ts
-@@ -61,10 +61,14 @@
-   const { storage } = app;
+  tool("showcase-part-a2-apply", ids.a2, "apply_patch", 434, 448, {
+    status: "completed",
+    title: "Apply patch: src/auth/keystore.ts",
+    input: {
+      patch: md(`--- a/src/auth/keystore.ts
++++ b/src/auth/keystore.ts
+@@ -12,24 +12,28 @@ export class Keystore {
+   private readonly cache = new Map<string, Token>()
  
-+  // Single in-flight refresh: concurrent callers await the same promise.
-+  let pending: Promise<Token> | null = null;
+   async get(key: string): Promise<Token | null> {
+-    const hit = this.cache.get(key)
+-    if (hit && hit.exp > Date.now()) return hit
+-    return this.read(key)
+-  }
+-
+-  async set(key: string, token: Token): Promise<void> {
+-    await this.write(key, token)
+-    this.cache.set(key, token)
+-  }
++    const hit = await this.entry(key)
++    if (hit && hit.exp > Date.now()) return hit
++    const fallback = await this.fallback.read(key)
++    if (fallback) this.cache.set(key, fallback)
++    return fallback
++  }
 +
-   app.on('token:refresh', async (token) => {
--    await storage.persist(token);
-+    if (pending) return pending;
-+    pending = storage.persist(token).finally(() => { pending = null; });
-+    return pending;
-   });
++  async set(key: string, token: Token): Promise<void> {
++    await this.entry(key)
++    await this.fallback.write(key, token)
++    this.cache.set(key, token)
++  }
  
--  app.on('focus', () => scheduleRefresh());
-+  app.on('focus', () => { void refresh(); });
+   async delete(key: string): Promise<void> {
+     this.cache.delete(key)
+     await this.fallback.delete(key)
+   }
+ 
+   // The OS keystore is the fast path; an encrypted file under the app's
+-  // private dir is the fallback so sign-in never hard-fails on devices
+-  // where the hardware keystore is wedged.
++  // private dir is the fallback so sign-in never hard-fails on devices
++  // where the hardware keystore is wedged. Both paths now share the same
++  // cache map, which the old set() bypassed.
+ 
+   private async read(key: string): Promise<Token | null> {
+     try {
+@@ -38,9 +42,11 @@ export class Keystore {
+       return this.fallback.read(key)
+     }
+   }
++
++  private async entry(key: string): Promise<Token | null> {
++    return this.cache.get(key) ?? null
++  }
+ }
+ 
+ export function createKeystore(fallback: Storage): Keystore {
+   return new Keystore(fallback)
+ }
 `),
-        },
-      }),
+    },
+  }),
       tool("showcase-part-a2-edit2", ids.a2, "edit", 450, 466, {
         status: "completed",
         title: "Edit src/auth/session.ts",

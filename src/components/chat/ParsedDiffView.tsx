@@ -64,6 +64,7 @@ function Lines({ block, lines, isDark }: { block: FoldBlock & { kind: "lines" };
     <View>
       <ScrollView
         {...WIDE_CONTENT_SCROLL_CONFIG}
+        testID="diff-view-scroll"
         onTouchStart={useScrollLock.getState().lock}
         onTouchEnd={useScrollLock.getState().unlock}
         onTouchCancel={useScrollLock.getState().unlock}

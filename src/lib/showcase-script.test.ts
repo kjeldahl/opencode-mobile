@@ -106,3 +106,16 @@ test("showcase: is deterministic for a fixed `now` and relative for a moving one
   const after = buildShowcaseScript(1_000_000 + 60_000).messages[0].time.created
   assert.equal(after - before, 60_000)
 })
+
+test("showcase: the wide apply_patch renders as a folded unified diff", () => {
+  const patches = Object.values(script.parts)
+    .flat()
+    .filter((p) => p.type === "tool" && p.tool === "apply_patch")
+    .map((p) => (p.state?.input as { patch?: string }).patch || "")
+  assert.ok(patches.length > 0)
+  for (const body of patches) {
+    assert.ok(body.includes("\n@@"), "apply_patch must be a unified diff so PatchDetail folds it")
+    assert.ok(body.startsWith("--- a/"), `apply_patch needs a --- a/ header: ${body.slice(0, 24)}`)
+    assert.ok(body.split("\n").length > 40, "apply_patch should be long enough to demo folding")
+  }
+})

@@ -269,8 +269,10 @@ export default function SessionsScreen() {
   const rows = useMemo<ListRow[]>(() => {
     const groups = groupByDirectory(sessions)
     // The showcase is a demo, not a session — a trailing row keeps it out of
-    // the directory grouping (and away from long-press rename/delete).
-    const showcase: ListRow[] = [{ type: "showcase" }]
+    // the directory grouping (and away from long-press rename/delete). It is
+    // hidden for a connected user with zero sessions: that state should show
+    // the "no sessions yet" hint, not a demo card.
+    const showcase: ListRow[] = sessions.length > 0 ? [{ type: "showcase" }] : []
     if (groups.length <= 1) {
       return [...sessions.map((session) => ({ type: "session" as const, session })), ...showcase]
     }

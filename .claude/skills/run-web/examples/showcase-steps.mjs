@@ -15,7 +15,7 @@ export default async (page, shot) => {
   await click(page.getByTestId("header-stats"))
   await shot("stats")
 
-  // "Called 3 tools, edited 3 files" is the turn carrying the wide apply_patch.
+  // The a2 turn ends with "Called 4 tools, edited 3 files" — the one carrying the wide apply_patch.
   const summaries = page.getByTestId("turn-summary")
   let target = -1
   for (let i = 0; i < (await summaries.count()); i++) {
@@ -25,7 +25,7 @@ export default async (page, shot) => {
   await click(summaries.nth(target))
   await shot("work-pane")
 
-  await click(page.getByText("Apply patch: src/auth/keystore.ts (wide diff)"))
+  await click(page.getByText("Apply patch: src/auth/keystore.ts"))
   await shot("fold-collapsed")
 
   const folds = page.getByTestId("diff-fold")

@@ -160,15 +160,22 @@ function EditDetail({ input, output, isDark }: { input: unknown; output: unknown
 
 function PatchDetail({ input, isDark }: { input: unknown; isDark: boolean }) {
   const patch = typeof input === "object" && input !== null ? (input as Record<string, unknown>).patch : undefined
+  // A unified diff folds (hunk headers are kept, unchanged runs collapse). The
+  // apply_patch-native `*** Update/Add/Delete File:` format is not unified, so
+  // it stays a plain preformatted block.
+  const unified = typeof patch === "string" && patch.includes("\n@@")
   return (
     <View style={s.detailSection}>
-      {typeof patch === "string" && patch.length > 0 && (
-        <View style={[s.codeBlock, isDark && s.codeBlockDark]}>
-          <Text style={[s.codePre, isDark && s.codePteDark]} selectable numberOfLines={60}>
-            {patch}
-          </Text>
-        </View>
-      )}
+      {typeof patch === "string" && patch.length > 0 &&
+        (unified ? (
+          <ParsedDiffView patch={patch} isDark={isDark} />
+        ) : (
+          <View style={[s.codeBlock, isDark && s.codeBlockDark]}>
+            <Text style={[s.codePre, isDark && s.codePteDark]} selectable numberOfLines={60}>
+              {patch}
+            </Text>
+          </View>
+        ))}
     </View>
   )
 }
