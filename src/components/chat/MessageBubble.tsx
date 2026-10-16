@@ -6,6 +6,7 @@ import { ToolCallCard } from "./ToolCallCard"
 import { ReasoningBlock } from "./ReasoningBlock"
 import type { Message, Part } from "../../lib/sdk"
 import { stripMarkers } from "../../lib/pr"
+import { newTokens } from "../../lib/turns"
 
 const SCREEN_WIDTH = Dimensions.get("window").width
 
@@ -107,7 +108,7 @@ export const MessageBubble = memo(
         {/* Tokens/cost for assistant messages */}
         {!isUser && message.tokens && (
           <Text style={[s.tokens, isDark && s.tokensDark]}>
-            {message.tokens.input + message.tokens.output} tokens
+            {newTokens(message)} tokens
             {message.cost ? ` · $${message.cost.toFixed(4)}` : ""}
           </Text>
         )}

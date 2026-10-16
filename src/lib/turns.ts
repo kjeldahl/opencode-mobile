@@ -72,13 +72,11 @@ function split(parts: Part[]): Segment[] {
 }
 
 /** Builds one turn from consecutive assistant entries. `busy` marks it in flight. */
-// Each step re-sends the whole context as input, so summing steps inflates the
-// count. Use the last step's total, same as the session header.
-function latest(messages: Message[]): number {
-  const last = messages.findLast((m) => m.tokens && m.tokens.output > 0)
-  const t = last?.tokens
+// New tokens only: cache reads are the re-sent context, so they're excluded.
+export function newTokens(m: Message): number {
+  const t = m.tokens
   if (!t) return 0
-  return t.input + t.output + (t.reasoning || 0) + (t.cache?.read || 0) + (t.cache?.write || 0)
+  return t.input + t.output + (t.reasoning || 0) + (t.cache?.write || 0)
 }
 
 export function buildTurn(entries: Entry[], busy: boolean): Turn {
@@ -107,7 +105,7 @@ export function buildTurn(entries: Entry[], busy: boolean): Turn {
     thinking: [...loose, ...tail.filter((p) => p.type === "reasoning")],
     final: tail.filter((p) => p.type === "text"),
     files: all.filter(isImage),
-    tokens: latest(messages),
+    tokens: messages.reduce((n, m) => n + newTokens(m), 0),
     cost: messages.reduce((n, m) => n + (m.cost || 0), 0),
     modelID: last.modelID,
   }
