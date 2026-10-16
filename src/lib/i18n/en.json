@@ -12,6 +12,7 @@
     "sections": {
       "security": "Security",
       "notifications": "Notifications",
+      "demo": "Demo",
       "about": "About"
     },
     "security": {
@@ -27,6 +28,12 @@
       "lockNow": {
         "label": "Lock App Now",
         "description": "Require authentication to reopen"
+      }
+    },
+    "demo": {
+      "showcase": {
+        "label": "Demo showcase session",
+        "description": "Show the static demo session entry in the sessions list. Defaults to on for PR builds, off for releases."
       }
     },
     "notifications": {

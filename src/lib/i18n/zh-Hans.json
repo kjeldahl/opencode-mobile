@@ -12,6 +12,7 @@
     "sections": {
       "security": "安全",
       "notifications": "通知",
+      "demo": "演示",
       "about": "关于"
     },
     "security": {
@@ -27,6 +28,12 @@
       "lockNow": {
         "label": "立即锁定应用",
         "description": "重新打开时需要验证身份"
+      }
+    },
+    "demo": {
+      "showcase": {
+        "label": "演示展示会话",
+        "description": "在会话列表中显示静态演示会话入口。PR 构建默认开启，正式版默认关闭。"
       }
     },
     "notifications": {

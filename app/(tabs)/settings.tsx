@@ -75,7 +75,7 @@ export default function SettingsScreen() {
   const { t } = useTranslation()
 
   const { settings, hasBiometrics, updateSettings, lock } = useAuth()
-  const { notifications, setNotification, locale, setLocale } = useSettings()
+  const { notifications, setNotification, locale, setLocale, demoSession, setDemoSession } = useSettings()
   const [osGranted, setOsGranted] = useState<boolean | null>(null)
 
   // Settings is where a user goes to ask "what am I running?". Answer it, and if
@@ -207,6 +207,22 @@ export default function SettingsScreen() {
             </Text>
           </View>
         )}
+      </SettingSection>
+
+      <SettingSection title={t("settings.sections.demo")} isDark={isDark}>
+        <SettingRow
+          icon="play-circle"
+          label={t("settings.demo.showcase.label")}
+          description={t("settings.demo.showcase.description")}
+          isDark={isDark}
+          right={
+            <Switch
+              value={demoSession}
+              onValueChange={setDemoSession}
+              trackColor={{ false: "#767577", true: "#22c55e" }}
+            />
+          }
+        />
       </SettingSection>
 
       <SettingSection title={t("settings.sections.about")} isDark={isDark}>

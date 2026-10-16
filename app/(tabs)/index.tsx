@@ -39,6 +39,7 @@ import { nameOf } from "../../src/lib/path-utils"
 import { newChatDir, newChatProjects, projectDir, projectName, tracksChanges } from "../../src/lib/projects"
 import { SETUP_GUIDE_URL } from "../../src/lib/links"
 import { connectionBanner } from "../../src/lib/connection-status"
+import { useSettings } from "../../src/stores/settings"
 
 function formatTime(timestamp: number, t: (key: string, opts?: Record<string, unknown>) => string): string {
   const date = new Date(timestamp)
@@ -209,6 +210,7 @@ export default function SessionsScreen() {
   const [serverProjects, setServerProjects] = useState<Project[]>([])
 
   const { sessions, isLoading, error, loadSessions, createSession, deleteSession } = useSessions()
+  const demoSession = useSettings((s) => s.demoSession)
   const {
     activeConnection,
     client,
@@ -269,10 +271,10 @@ export default function SessionsScreen() {
   const rows = useMemo<ListRow[]>(() => {
     const groups = groupByDirectory(sessions)
     // The showcase is a demo, not a session — a trailing row keeps it out of
-    // the directory grouping (and away from long-press rename/delete). It is
-    // hidden for a connected user with zero sessions: that state should show
-    // the "no sessions yet" hint, not a demo card.
-    const showcase: ListRow[] = sessions.length > 0 ? [{ type: "showcase" }] : []
+    // the directory grouping (and away from long-press rename/delete). With
+    // zero real sessions it is also the empty state, so the card stands in on
+    // its own instead of leaving a blank list.
+    const showcase: ListRow[] = demoSession ? [{ type: "showcase" }] : []
     if (groups.length <= 1) {
       return [...sessions.map((session) => ({ type: "session" as const, session })), ...showcase]
     }
@@ -291,7 +293,7 @@ export default function SessionsScreen() {
       }
     }
     return [...out, ...showcase]
-  }, [sessions, collapsedDirs])
+  }, [sessions, collapsedDirs, demoSession])
 
   // Fetch server-known projects when the new session modal opens
   useEffect(() => {
