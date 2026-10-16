@@ -12,6 +12,7 @@
     "sections": {
       "security": "安全",
       "notifications": "通知",
+      "demo": "演示",
       "about": "关于"
     },
     "security": {
@@ -27,6 +28,12 @@
       "lockNow": {
         "label": "立即锁定应用",
         "description": "重新打开时需要验证身份"
+      }
+    },
+    "demo": {
+      "showcase": {
+        "label": "演示展示会话",
+        "description": "在会话列表中显示静态演示会话入口。PR 构建默认开启，正式版默认关闭。"
       }
     },
     "notifications": {
@@ -253,6 +260,8 @@
       "deleteFailedMessage": "无法删除该会话。请重试。",
       "createFailedMessage": "创建会话失败。请检查网络连接后重试。"
     },
+    "showcaseTitle": "展示 — 所有卡片",
+    "showcaseSubtitle": "静态演示会话，无需服务器",
     "empty": {
       "noConnectionTitle": "无连接",
       "noConnectionSubtitle": "连接到运行 opencode serve 的电脑（同一网络或通过 Tailscale）以开始使用。",
@@ -469,6 +478,11 @@
     "ctaSubtitle": "这是一个脚本化的演示。连接您自己的 opencode 服务器即可真正体验。",
     "connectButton": "连接您自己的服务器",
     "setupGuideLink": "如何设置服务器"
+  },
+  "showcase": {
+    "banner": "展示 — 所有卡片，未连接服务器",
+    "readOnly": "演示 — 只读，未连接服务器",
+    "connect": "连接您自己的服务器"
   },
   "update": {
     "available": "有可用更新",

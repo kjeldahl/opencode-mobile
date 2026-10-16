@@ -22,6 +22,10 @@ interface Props {
   // since opencode 1.15).
   changes?: ChangeTotals | null
   onChangesPress?: () => void
+  // Provider catalog override. Live sessions pass the loaded catalog; the
+  // offline showcase has no client to load one from, so it passes a static
+  // one to keep the context-window math identical.
+  providersOverride?: Provider[]
 }
 
 function compact(n: number): string {
@@ -59,8 +63,10 @@ export function SessionInfo({
   onClose,
   changes,
   onChangesPress,
+  providersOverride,
 }: Props) {
   const { t } = useTranslation()
+  const providerList = providersOverride || providers
   // Match TUI: last assistant message tokens (context window), cumulative cost
   const stats = useMemo(() => {
     let cost = 0
@@ -68,8 +74,8 @@ export function SessionInfo({
       if (msg.role !== "assistant") continue
       if (msg.cost) cost += msg.cost
     }
-    return { cost, ...contextUsage(messages, providers) }
-  }, [messages, providers])
+    return { cost, ...contextUsage(messages, providerList) }
+  }, [messages, providerList])
 
   if (!visible) return null
 

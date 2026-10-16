@@ -39,6 +39,7 @@ import { nameOf } from "../../src/lib/path-utils"
 import { newChatDir, newChatProjects, projectDir, projectName, tracksChanges } from "../../src/lib/projects"
 import { SETUP_GUIDE_URL } from "../../src/lib/links"
 import { connectionBanner } from "../../src/lib/connection-status"
+import { useSettings } from "../../src/stores/settings"
 
 function formatTime(timestamp: number, t: (key: string, opts?: Record<string, unknown>) => string): string {
   const date = new Date(timestamp)
@@ -127,6 +128,34 @@ function SessionItem({
 type ListRow =
   | { type: "header"; directory: string; shortName: string; count: number; collapsed: boolean }
   | { type: "session"; session: Session }
+  | { type: "showcase" }
+
+// Entry into the static showcase (app/showcase.tsx). Rendered as a list row so
+// the offline demo is reachable with a live connection too — the issue 32
+// point is being able to view the cards without setting up a scenario.
+function ShowcaseCard({ isDark }: { isDark: boolean }) {
+  const { t } = useTranslation()
+  return (
+    <TouchableOpacity
+      style={[styles.sessionItem, isDark && styles.sessionItemDark]}
+      onPress={() => router.push("/showcase")}
+      activeOpacity={0.7}
+      testID="showcase-card"
+    >
+      <View style={styles.sessionContent}>
+        <View style={styles.sessionHeader}>
+          <Text style={[styles.sessionTitle, isDark && styles.textDark]} numberOfLines={1}>
+            {t("sessionsList.showcaseTitle")}
+          </Text>
+        </View>
+        <View style={styles.sessionMetaRow}>
+          <Text style={[styles.sessionMeta, isDark && styles.metaDark]}>{t("sessionsList.showcaseSubtitle")}</Text>
+        </View>
+      </View>
+      <Ionicons name="chevron-forward" size={20} color={isDark ? "#666666" : "#999999"} />
+    </TouchableOpacity>
+  )
+}
 
 function GroupHeader({
   row,
@@ -181,6 +210,7 @@ export default function SessionsScreen() {
   const [serverProjects, setServerProjects] = useState<Project[]>([])
 
   const { sessions, isLoading, error, loadSessions, createSession, deleteSession } = useSessions()
+  const demoSession = useSettings((s) => s.demoSession)
   const {
     activeConnection,
     client,
@@ -240,8 +270,13 @@ export default function SessionsScreen() {
   // everything lives in one directory — a lone header adds noise, not clarity.
   const rows = useMemo<ListRow[]>(() => {
     const groups = groupByDirectory(sessions)
+    // The showcase is a demo, not a session — a trailing row keeps it out of
+    // the directory grouping (and away from long-press rename/delete). With
+    // zero real sessions it is also the empty state, so the card stands in on
+    // its own instead of leaving a blank list.
+    const showcase: ListRow[] = demoSession ? [{ type: "showcase" }] : []
     if (groups.length <= 1) {
-      return sessions.map((session) => ({ type: "session", session }))
+      return [...sessions.map((session) => ({ type: "session" as const, session })), ...showcase]
     }
     const out: ListRow[] = []
     for (const group of groups) {
@@ -257,8 +292,8 @@ export default function SessionsScreen() {
         for (const session of group.items) out.push({ type: "session", session })
       }
     }
-    return out
-  }, [sessions, collapsedDirs])
+    return [...out, ...showcase]
+  }, [sessions, collapsedDirs, demoSession])
 
   // Fetch server-known projects when the new session modal opens
   useEffect(() => {
@@ -660,10 +695,12 @@ export default function SessionsScreen() {
 
       <FlatList
         data={rows}
-        keyExtractor={(row) => (row.type === "header" ? `dir:${row.directory}` : row.session.id)}
+        keyExtractor={(row) => (row.type === "header" ? `dir:${row.directory}` : row.type === "showcase" ? "showcase" : row.session.id)}
         renderItem={({ item: row }) =>
           row.type === "header" ? (
             <GroupHeader row={row} isDark={isDark} onToggle={() => toggleGroup(row.directory)} />
+          ) : row.type === "showcase" ? (
+            <ShowcaseCard isDark={isDark} />
           ) : (
             <SessionItem
               session={row.session}
