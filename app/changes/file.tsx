@@ -1,11 +1,13 @@
-import { useMemo } from "react"
+import { useMemo, useState } from "react"
 import { View, Text, FlatList, StyleSheet, TouchableOpacity, useColorScheme } from "react-native"
 import { Stack, router, useLocalSearchParams } from "expo-router"
 import { Ionicons } from "@expo/vector-icons"
 import { useTranslation } from "react-i18next"
 import { useChanges } from "../../src/stores/changes"
 import { parsePatch, sortDiffs, splitPath } from "../../src/lib/changes"
-import { DiffRow } from "../../src/components/chat"
+import { DiffRow, FoldRow } from "../../src/components/chat"
+import { buildDiffFoldItems } from "../../src/components/chat/diff-fold"
+import type { DiffLine } from "../../src/components/chat/diff-compute"
 
 // Fullscreen diff of one file from the Changes view. Long lines wrap; the
 // patch comes from the Changes store entry (`key`) the file list was showing;
@@ -65,18 +67,36 @@ export default function ChangeFileScreen() {
           </>
         )}
       </View>
-      <FlatList
-        key={file}
-        data={lines}
-        keyExtractor={(_, index) => String(index)}
-        renderItem={({ item }) => <DiffRow line={item} isDark={isDark} wrap />}
-        initialNumToRender={60}
-        windowSize={11}
-        ListEmptyComponent={<Text style={[s.empty, isDark && s.metaDark]}>{t("changes.noPatch")}</Text>}
-        contentContainerStyle={s.list}
-        testID="change-file-diff"
-      />
+      <FileDiff key={file} lines={lines} isDark={isDark} />
     </View>
+  )
+}
+
+// Diff body with git-style collapse (issue #34): long unchanged runs fold into
+// a tappable gap that doubles the shown context each tap. Keyed by file so the
+// per-gap expand state resets when stepping between files.
+function FileDiff({ lines, isDark }: { lines: DiffLine[]; isDark: boolean }) {
+  const [levels, setLevels] = useState<Record<number, number>>({})
+  const { t } = useTranslation()
+  const items = useMemo(() => buildDiffFoldItems(lines, levels), [lines, levels])
+  const expand = (id: number) => setLevels((prev) => ({ ...prev, [id]: (prev[id] ?? 0) + 1 }))
+  return (
+    <FlatList
+      data={items}
+      keyExtractor={(_, index) => String(index)}
+      renderItem={({ item }) =>
+        item.kind === "line" ? (
+          <DiffRow line={lines[item.index]} isDark={isDark} wrap />
+        ) : (
+          <FoldRow hidden={item.hidden} isDark={isDark} onExpand={() => expand(item.id)} />
+        )
+      }
+      initialNumToRender={60}
+      windowSize={11}
+      ListEmptyComponent={<Text style={[s.empty, isDark && s.metaDark]}>{t("changes.noPatch")}</Text>}
+      contentContainerStyle={s.list}
+      testID="change-file-diff"
+    />
   )
 }
 
