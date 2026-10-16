@@ -1,0 +1,8 @@
+v0.7.0
+
+- feat(chat): stats button doubles as context-usage gauge (#31) (#37)
+- chore: add mise.toml (node 24)
+- docs: move all repo references to our fork kjeldahl/opencode-mobile
+- feat(markdown): render chat images (forge /__forge/file) with expo-image (#29)
+- feat: selectable assistant markdown + tool detail text (#27)
+- Show PR# and commit sha as links for PR builds (#24)
