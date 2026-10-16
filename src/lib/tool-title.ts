@@ -1,7 +1,11 @@
 // GitHub issue #30: tool cards showed just "bash" when the server gave no
 // title. Tier 1 = static heuristics (no model call). Returns undefined when
 // nothing better than the server title / tool name can be said.
-type Input = Record<string, unknown> | undefined
+type Input = Record<string, unknown>
+
+function record(v: unknown): Input {
+  return typeof v === "object" && v !== null ? (v as Input) : {}
+}
 
 const MAX = 60
 
@@ -11,7 +15,7 @@ function clip(text: string): string {
 }
 
 function str(input: Input, key: string): string | undefined {
-  const v = input?.[key]
+  const v = input[key]
   return typeof v === "string" && v.trim() ? v : undefined
 }
 
@@ -104,8 +108,9 @@ export function bashTitle(command: string): string | undefined {
   }
 }
 
-export function toolTitle(tool: string | undefined, input: Input): string | undefined {
+export function toolTitle(tool: string | undefined, raw: unknown): string | undefined {
   if (!tool) return undefined
+  const input = record(raw)
   if (tool === "bash") {
     const desc = str(input, "description")
     if (desc) return clip(desc)
@@ -128,7 +133,7 @@ export function toolTitle(tool: string | undefined, input: Input): string | unde
 }
 
 // Card header title: server title unless generic, then heuristic, then tool name.
-export function cardTitle(tool: string | undefined, serverTitle: string | undefined, input: Input): string | undefined {
+export function cardTitle(tool: string | undefined, serverTitle: string | undefined, input: unknown): string | undefined {
   if (!isGeneric(serverTitle, tool)) return serverTitle
   return toolTitle(tool, input) ?? serverTitle ?? tool
 }
