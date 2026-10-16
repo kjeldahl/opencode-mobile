@@ -4,6 +4,9 @@ import { Ionicons } from "@expo/vector-icons"
 import { useTranslation } from "react-i18next"
 import type { Part } from "../../lib/sdk"
 import { DiffView } from "./DiffView"
+import { Markdown } from "../markdown"
+import { useScrollLock } from "../../stores/scroll-lock"
+import { taskResult } from "../../lib/task-output"
 
 const TOOL_ICONS: Record<string, string> = {
   read: "glasses-outline",
@@ -189,18 +192,28 @@ function WebfetchDetail({ input, isDark }: { input: unknown; isDark: boolean }) 
   )
 }
 
-function TaskDetail({ input, isDark }: { input: unknown; isDark: boolean }) {
+function TaskDetail({ input, output, isDark }: { input: unknown; output: unknown; isDark: boolean }) {
+  const { t } = useTranslation()
   const description =
     typeof input === "object" && input !== null ? (input as Record<string, unknown>).description : undefined
   const prompt = typeof input === "object" && input !== null ? (input as Record<string, unknown>).prompt : undefined
+  const result = taskResult(output)
+  // Prompt is not line-capped: truncating it left the detail scroll only
+  // a couple of lines of travel before it bottomed out (issue #38).
   return (
     <View style={s.detailSection}>
       {typeof description === "string" && <Text style={[s.detailMeta, isDark && s.detailMetaDark]} selectable>{description}</Text>}
       {typeof prompt === "string" && prompt.length > 0 && (
         <View style={[s.codeBlock, isDark && s.codeBlockDark, { marginTop: 6 }]}>
-          <Text style={[s.codePre, isDark && s.codePteDark]} selectable numberOfLines={20}>
+          <Text style={[s.codePre, isDark && s.codePteDark]} selectable>
             {prompt}
           </Text>
+        </View>
+      )}
+      {result && (
+        <View style={s.taskResult} testID="tool-call-card-task-result">
+          <Text style={[s.detailLabel, isDark && s.detailMetaDark]}>{t("chat.toolCallCard.response")}</Text>
+          <Markdown>{result}</Markdown>
         </View>
       )}
     </View>
@@ -278,7 +291,7 @@ function ToolDetail({ tool, isDark }: { tool: Part; isDark: boolean }) {
     case "websearch":
       return <WebfetchDetail input={input} isDark={isDark} />
     case "task":
-      return <TaskDetail input={input} isDark={isDark} />
+      return <TaskDetail input={input} output={output} isDark={isDark} />
     case "todowrite":
       return <TodoDetail input={input} isDark={isDark} />
     default:
@@ -315,6 +328,11 @@ interface Props {
 export function ToolCallCard({ tool, isDark }: Props) {
   const { t } = useTranslation()
   const [expanded, setExpanded] = useState(false)
+  const [viewport, setViewport] = useState(0)
+  const [content, setContent] = useState(0)
+  // Only an overflowing detail claims the drag; a short one lets it fall
+  // through so dragging over it still scrolls the chat / work pane.
+  const overflows = content > viewport + 1
   const icon = (tool.tool && TOOL_ICONS[tool.tool]) || "extension-puzzle-outline"
   const status = tool.state?.status || "pending"
   const color = statusColor(status)
@@ -366,7 +384,21 @@ export function ToolCallCard({ tool, isDark }: Props) {
 
       {/* Expanded detail */}
       {expanded && (
-        <ScrollView style={s.detailScroll} nestedScrollEnabled showsVerticalScrollIndicator={false} testID="tool-call-card-detail">
+        // Issue #38: nestedScrollEnabled alone isn't enough on Android — once
+        // the detail hits its end the parent (WorkPane / chat list) takes over
+        // the drag. Lock the parent while an overflowing detail is touched,
+        // same as the horizontal CodeBlock/DiffView fix for #14.
+        <ScrollView
+          style={s.detailScroll}
+          nestedScrollEnabled
+          showsVerticalScrollIndicator={overflows}
+          onLayout={(e) => setViewport(e.nativeEvent.layout.height)}
+          onContentSizeChange={(_, h) => setContent(h)}
+          onTouchStart={overflows ? useScrollLock.getState().lock : undefined}
+          onTouchEnd={useScrollLock.getState().unlock}
+          onTouchCancel={useScrollLock.getState().unlock}
+          testID="tool-call-card-detail"
+        >
           {error && <ErrorBanner message={error} isDark={isDark} />}
           <ToolDetail tool={tool} isDark={isDark} />
         </ScrollView>
@@ -429,6 +461,8 @@ const s = StyleSheet.create({
   detailFileDark: { color: "#a78bfa", backgroundColor: "#1a1a2e" },
   detailMeta: { fontSize: 12, color: "#666666", lineHeight: 18 },
   detailMetaDark: { color: "#888888" },
+  detailLabel: { fontSize: 11, fontWeight: "600", color: "#666666", textTransform: "uppercase", letterSpacing: 0.5 },
+  taskResult: { marginTop: 8, gap: 2 },
 
   // Code block
   codeBlock: {
