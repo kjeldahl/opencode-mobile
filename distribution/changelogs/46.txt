@@ -1,0 +1,5 @@
+v0.8.0
+
+- feat(chat): compact reconnect indicator replaces the banner (#35) (#41)
+- fix: turn card token count too high (#36)
+- fix(chat): subagent card scroll + render response (#38) (#39)
