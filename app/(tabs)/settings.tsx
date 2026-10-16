@@ -223,7 +223,9 @@ export default function SettingsScreen() {
                 : model.status === "error"
                   ? t("settings.aiSummaries.error", { message: model.error })
                   : model.status === "ready"
-                    ? t("settings.aiSummaries.ready")
+                    ? model.lastError
+                      ? t("settings.aiSummaries.lastError", { message: model.lastError })
+                      : t("settings.aiSummaries.ready")
                     : t("settings.aiSummaries.description")
             }
             isDark={isDark}

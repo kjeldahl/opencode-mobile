@@ -70,7 +70,8 @@
       "always": {
         "label": "Always use AI summaries",
         "description": "Testing: skip built-in rules, summarize every tool call"
-      }
+      },
+      "lastError": "Last error: {{message}}"
     }
   },
   "session": {

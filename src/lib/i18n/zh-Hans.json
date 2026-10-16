@@ -70,7 +70,8 @@
       "always": {
         "label": "始终使用 AI 摘要",
         "description": "测试用：跳过内置规则，为每个工具调用生成摘要"
-      }
+      },
+      "lastError": "最近错误：{{message}}"
     }
   },
   "session": {

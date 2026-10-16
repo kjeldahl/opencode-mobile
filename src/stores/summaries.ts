@@ -4,7 +4,7 @@ import { create } from "zustand"
 import AsyncStorage from "@react-native-async-storage/async-storage"
 import { buildMessages, compactInput, sanitize } from "../lib/summary-prompt"
 import { createQueue } from "../lib/summary-queue"
-import { complete } from "../lib/local-llm"
+import { complete, reportError, useModel } from "../lib/local-llm"
 
 const SUMMARIES_KEY = "opencode_tool_summaries"
 const MAX_ENTRIES = 500
@@ -44,8 +44,16 @@ export const useSummaries = create<SummariesState>((set, get) => {
       if (!compact) return
       attempted.add(partId)
       queue.enqueue(partId, async () => {
-        const text = sanitize(await complete(buildMessages(tool, compact)))
-        if (!text) return
+        const raw = await complete(buildMessages(tool, compact)).catch((e: unknown) => {
+          reportError(`inference failed: ${e instanceof Error ? e.message : String(e)}`)
+          return undefined
+        })
+        const text = sanitize(raw)
+        if (!text) {
+          if (raw !== undefined) reportError(`unusable output: ${JSON.stringify(raw.slice(0, 80))}`)
+          return
+        }
+        if (useModel.getState().lastError) useModel.setState({ lastError: undefined })
         const items = { ...get().items, [partId]: text }
         const keys = Object.keys(items)
         for (const key of keys.slice(0, Math.max(0, keys.length - MAX_ENTRIES))) delete items[key]

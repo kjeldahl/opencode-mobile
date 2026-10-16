@@ -24,6 +24,8 @@ interface ModelState {
   status: ModelStatus
   progress: number
   error?: string
+  // Last summarize failure (load/inference/unusable output); shown in Settings for debugging.
+  lastError?: string
   refresh: () => Promise<void>
   download: () => Promise<void>
   remove: () => Promise<void>
@@ -108,6 +110,11 @@ async function context(): Promise<LlamaContext> {
     loading = undefined
     throw e
   })
+}
+
+export function reportError(message: string) {
+  console.warn(`[ai-summaries] ${message}`)
+  useModel.setState({ lastError: message })
 }
 
 export async function complete(messages: { role: string; content: string }[]): Promise<string | undefined> {
