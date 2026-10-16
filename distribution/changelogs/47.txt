@@ -1,0 +1,7 @@
+v0.9.0
+
+- feat(showcase): static demo session with every card type, no server needed (#47)
+- feat: per-card token count in work pane (#45) (#48)
+- fix: bash card title prefers input.description (#30) (#46)
+- feat(diff): collapse unchanged regions with doubling context (#34) (#43)
+- feat: heuristic tool card titles (#42)
