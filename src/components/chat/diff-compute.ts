@@ -76,26 +76,13 @@ export function computeDiff(before: string, after: string): DiffLine[] {
 
   result.reverse()
 
-  // Collapse long context runs (show max 3 context lines between changes)
-  const collapsed: DiffLine[] = []
-  let contextRun = 0
-  for (const line of result) {
-    if (line.type === "context") {
-      contextRun++
-      if (contextRun <= 3) {
-        collapsed.push(line)
-      } else if (contextRun === 4) {
-        collapsed.push({ type: "context", text: "..." })
-      }
-    } else {
-      contextRun = 0
-      collapsed.push(line)
-    }
+  // Unchanged regions are no longer collapsed here — that is purely
+  // presentational now (see diff-fold.ts / issue #34), so callers fold around
+  // the DiffRows by index range and can double the shown context. The only
+  // thing kept is the hard render cap that bounds native view rows.
+  if (result.length > MAX_RENDERED_LINES) {
+    return [...result.slice(0, MAX_RENDERED_LINES), truncationMarker(result.length)]
   }
 
-  if (collapsed.length > MAX_RENDERED_LINES) {
-    return [...collapsed.slice(0, MAX_RENDERED_LINES), truncationMarker(collapsed.length)]
-  }
-
-  return collapsed
+  return result
 }

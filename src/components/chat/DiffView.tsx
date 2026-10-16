@@ -1,7 +1,9 @@
-import { View, Text, StyleSheet, Platform, ScrollView } from "react-native"
+import { useMemo, useState } from "react"
+import { View, Text, StyleSheet, Platform, ScrollView, TouchableOpacity } from "react-native"
 import { WIDE_CONTENT_SCROLL_CONFIG } from "../../lib/scroll-config"
 import { useScrollLock } from "../../stores/scroll-lock"
 import { computeDiff, type DiffLine } from "./diff-compute"
+import { buildDiffFoldItems, foldBlocks, type FoldBlock } from "./diff-fold"
 
 const mono = Platform.OS === "ios" ? "Menlo" : "monospace"
 
@@ -12,12 +14,36 @@ interface Props {
 }
 
 export function DiffView({ before, after, isDark }: Props) {
-  const lines = computeDiff(before, after)
+  const lines = useMemo(() => computeDiff(before, after), [before, after])
+  const [levels, setLevels] = useState<Record<number, number>>({})
 
   if (lines.length === 0) return null
 
+  const blocks = foldBlocks(buildDiffFoldItems(lines, levels))
+  const expand = (id: number) => setLevels((prev) => ({ ...prev, [id]: (prev[id] ?? 0) + 1 }))
+
   return (
     <View style={[s.container, isDark && s.containerDark]}>
+      {blocks.map((block, idx) =>
+        block.kind === "lines" ? (
+          <LinesBlock key={idx} block={block} lines={lines} isDark={isDark} />
+        ) : (
+          <FoldRow key={idx} hidden={block.hidden} isDark={isDark} onExpand={() => expand(block.id)} />
+        ),
+      )}
+    </View>
+  )
+}
+
+// One contiguous run of diff lines. Wrapped in a single horizontal ScrollView
+// so wide lines scroll sideways (issue #21) without nesting one ScrollView per
+// row inside the parent FlatList (issue #14). Fold rows live OUTSIDE this —
+// they stay full-width so they're a simple, wide tap target.
+function LinesBlock({ block, lines, isDark }: { block: FoldBlock & { kind: "lines" }; lines: DiffLine[]; isDark: boolean }) {
+  const rows = []
+  for (let index = block.from; index < block.to; index++) rows.push(<DiffRow key={index} line={lines[index]} isDark={isDark} />)
+  return (
+    <View key={`${block.from}-${block.to}`}>
       <ScrollView
         {...WIDE_CONTENT_SCROLL_CONFIG}
         testID="diff-view-scroll"
@@ -25,13 +51,23 @@ export function DiffView({ before, after, isDark }: Props) {
         onTouchEnd={useScrollLock.getState().unlock}
         onTouchCancel={useScrollLock.getState().unlock}
       >
-        <View>
-          {lines.map((line, idx) => (
-            <DiffRow key={idx} line={line} isDark={isDark} />
-          ))}
-        </View>
+        {rows}
       </ScrollView>
     </View>
+  )
+}
+
+export function FoldRow({ hidden, isDark, onExpand }: { hidden: number; isDark: boolean; onExpand: () => void }) {
+  return (
+    <TouchableOpacity
+      style={[s.fold, isDark && s.foldDark]}
+      onPress={onExpand}
+      accessibilityRole="button"
+      accessibilityLabel={`Show ${hidden} more unchanged lines`}
+      testID="diff-fold"
+    >
+      <Text style={[s.foldText, isDark && s.foldTextDark]}>⋯ {hidden} unchanged line{hidden === 1 ? "" : "s"}</Text>
+    </TouchableOpacity>
   )
 }
 
@@ -109,4 +145,17 @@ const s = StyleSheet.create({
   hunkDark: { backgroundColor: "#1e1b4b" },
   hunkText: { color: "#6366f1" },
   wrap: { flex: 1 },
+
+  fold: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: "#eef2ff",
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "#e0e7ff",
+    borderBottomColor: "#e0e7ff",
+  },
+  foldDark: { backgroundColor: "#1e1b4b", borderTopColor: "#312e81", borderBottomColor: "#312e81" },
+  foldText: { fontSize: 12, fontFamily: mono, color: "#6366f1", textAlign: "center" },
+  foldTextDark: { color: "#818cf8" },
 })
