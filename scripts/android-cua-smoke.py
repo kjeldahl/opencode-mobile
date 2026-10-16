@@ -356,7 +356,8 @@ def check_ui_text(text: str, case_sensitive: bool = False) -> bool:
     Prefer this over asking the LLM to look for text whenever possible.
 
     Example:
-        assert check_ui_text("Reconnecting"), "FAIL: reconnect banner not shown"
+        # The session header's connection indicator sets this content-desc.
+        assert check_ui_text("Reconnecting"), "FAIL: reconnect indicator not shown"
     """
     xml = ui_dump()
     haystack = xml if case_sensitive else xml.lower()
@@ -1006,10 +1007,13 @@ SMOKE_SCENARIOS = [
 # ---------------------------------------------------------------------------
 
 def run_scenario_sse_disconnect_banner(opencode_url: str, model: str, include_ui_xml: bool) -> dict:
-    """#42 — SSE disconnect banner.
+    """#42 — SSE disconnect indicator (still named for the banner it replaced).
 
-    Validates that when the network drops, the app shows a 'Reconnecting...'
-    banner in the session view. Pass/fail is determined by uiautomator XML dump,
+    Validates that when the network drops, the app says so quietly: a compact
+    header indicator whose accessibility label is "Reconnecting" (issue #35
+    removed the full-width banner — the check reads the content-desc that RN
+    emits from `accessibilityLabel`, which is what a screen reader and
+    uiautomator both see). Pass/fail is determined by the uiautomator XML dump,
     not LLM vision — no hallucination possible.
     """
     results: dict = {}
