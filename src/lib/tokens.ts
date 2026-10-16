@@ -1,4 +1,4 @@
-import type { Part } from "./sdk"
+import type { Part } from "./sdk.ts"
 
 // 298, 1.2k, 10k, 189k. Context is < 1M so no M formatting.
 export function formatTokens(n: number): string {
