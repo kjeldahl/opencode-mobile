@@ -1,0 +1,47 @@
+name: Cache cleanup
+
+# build.yml writes caches only from main. This keeps the 10 GB repo cache limit for what gets read:
+# it deletes a PR's leftover caches when it closes, and prunes old per-commit entries on main
+# (the gradle-home, ccache and Metro caches get a new key every main commit).
+on:
+  pull_request:
+    types: [closed]
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 3 * * 0"
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Delete closed PR caches
+        if: github.event_name == 'pull_request'
+        env:
+          PR_REF: refs/pull/${{ github.event.pull_request.number }}/merge
+          BRANCH_REF: refs/heads/${{ github.event.pull_request.head.ref }}
+        run: |
+          for ref in "$PR_REF" "$BRANCH_REF"; do
+            for id in $(gh cache list --ref "$ref" --limit 100 --json id --jq '.[].id'); do
+              gh cache delete "$id" && echo "deleted $id ($ref)"
+            done
+          done
+
+      - name: Prune old main caches
+        if: github.event_name != 'pull_request'
+        env:
+          KEEP: "2"
+        run: |
+          for prefix in gradle-home-v1 ccache-ccache- metro-; do
+            for id in $(gh cache list --ref refs/heads/main --key "$prefix" --sort created_at --order desc --limit 100 --json id --jq ".[$KEEP:][].id"); do
+              gh cache delete "$id" && echo "deleted $id ($prefix)"
+            done
+          done

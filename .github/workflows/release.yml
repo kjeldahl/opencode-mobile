@@ -2,7 +2,7 @@ name: Release
 
 # Cut a release: bump the version, write its changelog, commit, and push a v* tag.
 # A tag is what actually ships — it is what build.yml turns into a GitHub Release
-# (with the APK) and what publish-play-store.yml / publish-fdroid.yml publish.
+# (with the APK). Play/F-Droid publish workflows are parked in .github/workflows-disabled/.
 #
 # Defaults to bumping the MINOR version (0.5.0 -> 0.6.0, patch reset to 0). Set the
 # `version` input to publish a specific version instead (e.g. a hotfix: 0.5.1).
@@ -133,13 +133,13 @@ jobs:
 
       # Tags pushed with GITHUB_TOKEN do not create workflow runs, so dispatch the
       # tag-triggered pipelines explicitly. Without this the tag would sit un-built.
-      - name: Trigger build and publish on the new tag
+      - name: Trigger the build on the new tag
         env:
           NEXT: ${{ steps.version.outputs.next }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          for wf in build.yml publish-play-store.yml publish-fdroid.yml; do
+          for wf in build.yml; do
             gh workflow run "$wf" --ref "v${NEXT}" && echo "dispatched $wf on v${NEXT}"
           done
 
