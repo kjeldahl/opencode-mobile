@@ -7,6 +7,8 @@ Goal: bug-free E2E + published on F-Droid & Play + 1k downloads.
 
 ---
 
+> **Update (#49):** automated Play/F-Droid publishing is OFF; `publish-play-store.yml` / `publish-fdroid.yml` are parked in `.github/workflows-disabled/`. References to them below are historical.
+
 ## TL;DR status
 
 | Goal | State |

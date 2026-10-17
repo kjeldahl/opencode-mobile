@@ -87,7 +87,7 @@ function generateId(): string {
 
 #### M-01: No `permissions:` declaration at workflow/job level in most CI files
 
-**Files:** `.github/workflows/build.yml`, `.github/workflows/publish-play-store.yml`, `.github/workflows/cua-smoke.yml`
+**Files:** `.github/workflows/build.yml`, `.github/workflows-disabled/publish-play-store.yml`, `.github/workflows/cua-smoke.yml`
 **Description:** Only `build.yml`'s `release` job has `permissions: { contents: write }`. The `build`, `publish`, and CUA smoke test jobs have no explicit `permissions:` declaration, which means they inherit the repository default (typically `contents: read` but potentially broader if repo-level defaults are permissive). Without explicit minimal permissions, a compromised third-party action in the job could abuse default token permissions.
 **Remediation:** Add `permissions: read-all` (or the specific needed set) at the top of each workflow file, then grant elevated permissions only on the specific job that needs them. Example for `build.yml`:
 ```yaml

@@ -351,7 +351,7 @@ Bump this file before tagging a release. Keep it under 500 chars. Per-language v
 Result: the app cleared this path and is now live on the production track (see the
 status note at the top of this file). CI's default dispatch track (`internal`) is
 still used for routine test builds; production releases are dispatched explicitly
-(`track=production`) — see `.github/workflows/publish-play-store.yml`.
+(`track=production`) — see `.github/workflows-disabled/publish-play-store.yml`.
 
 ---
 

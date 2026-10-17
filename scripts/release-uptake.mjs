@@ -17,7 +17,7 @@
  *   1. WRONG POPULATION. Play vitals only sees devices that installed from Play
  *      AND left "share usage & diagnostics" on. This project also ships an APK
  *      on every GitHub release and a self-hosted F-Droid repo
- *      (`.github/workflows/publish-fdroid.yml`). Those installs never appear in
+ *      (`.github/workflows-disabled/publish-fdroid.yml`). Those installs never appear in
  *      Play's denominator, but they DO send Sentry events. Measured 2026-08-14:
  *      Play production had served versionCode 136 (2026-06-22) for eight weeks,
  *      yet 78% of Sentry's active users were on v0.4.10 — a build Play

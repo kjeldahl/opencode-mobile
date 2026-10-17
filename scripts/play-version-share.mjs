@@ -54,7 +54,7 @@ const PACKAGE_NAME = process.env.PLAY_PACKAGE_NAME || "cc.agentlabs.opencode";
 /**
  * CAREFUL: Play versionCodes are NOT the ones in android/app/build.gradle. The
  * publish workflow overwrites them with `github.run_number + 100`
- * (.github/workflows/publish-play-store.yml), so the gradle/tag mapping is
+ * (.github/workflows-disabled/publish-play-store.yml), so the gradle/tag mapping is
  * meaningless on Play. The table below was derived from the publish runs:
  *
  *   gh api repos/dzianisv/opencode-mobile/actions/workflows/278415225/runs \

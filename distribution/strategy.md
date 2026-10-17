@@ -126,6 +126,9 @@ Per iOS agent report (pending) — runbook at `distribution/ios-enrollment-runbo
 
 Once those manual steps are complete:
 
+> **Parked (#49):** automated Play/F-Droid publishing is OFF. The workflows are in `.github/workflows-disabled/`, which Actions ignores; `git mv` them back to `.github/workflows/` (and re-add them to `release.yml`'s dispatch loop) to re-enable. The list below describes the behaviour when enabled.
+
+
 - Tag `v0.2.4` (or whatever the next version is) → existing `publish-play-store.yml` CI runs:
   - Bumps `android.versionCode` from `github.run_number`
   - Builds signed AAB
