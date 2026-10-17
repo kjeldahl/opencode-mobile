@@ -46,7 +46,7 @@ For full company facts (D-U-N-S, address, governor, etc.) see `~/.agents/skills/
 5. ✅ Play Developer account created + $25 paid
 6. ✅ Payments profile linked w/ D-U-N-S 142059652
 7. ✅ Website + email verifications complete
-8. ✅ CI workflow `.github/workflows/publish-play-store.yml` patched:
+8. ✅ CI workflow `.github/workflows-disabled/publish-play-store.yml` patched:
    - versionCode auto-bumped from `github.run_number` (was hardcoded `1`, would have failed on 2nd release)
    - r0adkll/upload-google-play pinned to v1.1.5
    - `whatsNewDirectory: distribution/whatsnew` added
@@ -74,6 +74,8 @@ For full company facts (D-U-N-S, address, governor, etc.) see `~/.agents/skills/
 ---
 
 ## Publishing process (after identity verified)
+
+> **Parked (#49):** automated Play/F-Droid publishing is OFF. The workflows are in `.github/workflows-disabled/`, which Actions ignores; `git mv` them back to `.github/workflows/` (and re-add them to `release.yml`'s dispatch loop) to re-enable. Steps below describe the behaviour when enabled.
 
 1. (manual) Setup → API access → Link `opencode-mobile-deploy`. Grant `playstore-deploy@…` "Release to production, exclude devices, and use Play App Signing".
 2. (manual) Create app `ai.opencode.mobile`. Fill listing from `distribution/play-listing.md`.
@@ -120,7 +122,7 @@ and it is never equal to `app.json`'s committed `android.versionCode`.
 
 ## Files in repo
 
-- `.github/workflows/publish-play-store.yml` — CI automation
+- `.github/workflows-disabled/publish-play-store.yml` — CI automation
 - `distribution/play-listing.md` — store listing copy
 - `distribution/whatsnew/whatsnew-en-US` — release notes
 - `distribution/strategy.md` — broader distribution + monetization strategy

@@ -91,6 +91,8 @@ cat /path/to/service-account.json | \
 
 ## Step 9: Test CI Deployment
 
+> **Parked (#49):** automated Play/F-Droid publishing is OFF. The workflows are in `.github/workflows-disabled/`, which Actions ignores; `git mv` them back to `.github/workflows/` (and re-add them to `release.yml`'s dispatch loop) to re-enable. Steps below describe the behaviour when enabled.
+
 Trigger workflow manually:
 ```bash
 gh workflow run publish-play-store.yml --repo dzianisv/opencode-mobile
