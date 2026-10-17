@@ -166,5 +166,3 @@ function RootLayout() {
 }
 
 export default RootLayout
-
-// ci-timing-test: throwaway change, reverted next commit
