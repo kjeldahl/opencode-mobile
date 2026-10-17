@@ -65,9 +65,12 @@ jobs:
       # Replaces actions/cache and keeps the Gradle build cache, so unchanged library modules are not
       # recompiled. Saved from PRs too (default is main only): a PR's next push starts warm instead of
       # re-resolving every dependency (~2.5 min) until main has a cache.
+      # Caches are written only by pushes to main. PRs and tag builds restore from main's, which stops
+      # per-commit entries nothing reads again from piling up against the 10 GB repo cache limit.
+      # cache-cleanup.yml prunes old main entries and deletes a PR's caches when it closes.
       - uses: gradle/actions/setup-gradle@v4
         with:
-          cache-read-only: false
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
 
       # Gradle's build cache never covers CMake/ninja, so the native C++ (app, reanimated, worklets,
       # screens, ...) recompiled every run (~2 min). ccache keys on preprocessed source, so unchanged
@@ -76,6 +79,9 @@ jobs:
         with:
           key: ccache-${{ runner.os }}-ndk27.1.12297006
           max-size: 500M
+          save: ${{ github.ref == 'refs/heads/main' }}
+          # Drop objects this job did not touch, so the cache holds what the build uses, not history.
+          evict-old-files: job
 
       - name: Install dependencies
         run: npm install --legacy-peer-deps
@@ -83,7 +89,7 @@ jobs:
       # Metro's transform cache (see metro.config.js), so only changed JS files are re-transformed
       # in the bundle step. Content-addressed inside Metro, so a restore-keys fallback is safe.
       - name: Cache Metro transforms
-        uses: actions/cache@v5
+        uses: actions/cache/restore@v5
         with:
           path: .metro-cache
           key: metro-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.sha }}
@@ -167,6 +173,13 @@ jobs:
       - name: Check pinned NDK was used
         run: test -d "$ANDROID_HOME/ndk/27.1.12297006" || { echo "::error::NDK 27.1.12297006 not installed; update CCACHE_COMPILERCHECK and the ccache key in build.yml"; ls "$ANDROID_HOME/ndk"; exit 1; }
 
+      - name: Save Metro transforms
+        if: github.ref == 'refs/heads/main'
+        uses: actions/cache/save@v5
+        with:
+          path: .metro-cache
+          key: metro-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.sha }}
+
       - name: Upload APK artifact
         uses: actions/upload-artifact@v7
         with:
@@ -194,9 +207,10 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v4
 
+      # Restore-only: the build job writes the shared caches on main.
       - uses: gradle/actions/setup-gradle@v4
         with:
-          cache-read-only: false
+          cache-read-only: true
 
       # lintVitalRelease drags in the same JS bundle and native (CMake) tasks as the build, so it
       # shares the Metro and ccache caches (same keys and env as the build job).
@@ -204,12 +218,13 @@ jobs:
         with:
           key: ccache-${{ runner.os }}-ndk27.1.12297006
           max-size: 500M
+          save: false
 
       - name: Install dependencies
         run: npm install --legacy-peer-deps
 
       - name: Cache Metro transforms
-        uses: actions/cache@v5
+        uses: actions/cache/restore@v5
         with:
           path: .metro-cache
           key: metro-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.sha }}
