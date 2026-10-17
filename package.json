@@ -51,6 +51,7 @@
   },
   "devDependencies": {
     "@types/react": "~19.1.10",
+    "metro-cache": "0.83.3",
     "typescript": "~5.9.2"
   },
   "expo": {

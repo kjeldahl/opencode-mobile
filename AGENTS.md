@@ -173,6 +173,8 @@ The correct Azure AI Services endpoint (with actual deployments) is:
 GitHub Actions workflow: `.github/workflows/cua-smoke.yml`
 Secrets required: `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT` — must be configured on this repo; verify with `gh secret list --repo kjeldahl/opencode-mobile`.
 
+**Build caching** (`build.yml`, `cache-cleanup.yml`): ccache (native C++, keyed on the pinned NDK version via `CCACHE_COMPILERCHECK`; a step fails the build if the NDK moves, update the pin then), Metro transform cache (`METRO_CACHE_DIR`, see `metro.config.js`), Gradle build cache. Caches are written ONLY by pushes to `main`; PRs and tags restore only, so per-commit entries don't fill the 10 GB repo cache limit. `cache-cleanup.yml` deletes a closed PR's caches and keeps the newest 2 gradle-home/ccache/Metro entries on `main`. PRs build with `-Pandroid.enableResourceOptimizations=false`; `main` and `v*` tag builds (including tag dispatches from `release.yml`) stay fully optimized. Lint is skipped on `v*` tags.
+
 **Triggers**: Runs on push to `main` (with path filters) AND on `v*` tags (releases).
 
 **Dispatch inputs** (workflow_dispatch):
@@ -255,7 +257,7 @@ For pushes/gh CLI on this repo: the sandbox `gh` is already authenticated for `k
 ## Google Play Console
 
 - **Developer account**: VIBE TECHNOLOGIES, LLC (ID: `8842655543970815326`), Google login `vibeteaichnologies@gmail.com`. The `/u/N/` index is NOT stable — if a console URL bounces to accept-terms/create-developer-account you're on the wrong Google account; use the developer-account chooser to reach VIBE.
-- **Rebrand (2026-05-30)**: package renamed `ai.opencode.mobile` → `cc.agentlabs.opencode`. **App IS live on Play Store internal track** (v0.4.6, versionCode 33). CI publishes updates automatically via the service account after the first manual upload was completed. CI `packageName` = `cc.agentlabs.opencode`. NOTE: CI publish build needs the "Purge stale generated sources" step (commit 67e4c1f) or cached old-package autolinking breaks compile.
+- **Rebrand (2026-05-30)**: package renamed `ai.opencode.mobile` → `cc.agentlabs.opencode`. **App IS live on Play Store internal track** (v0.4.6, versionCode 33). **Automated publishing is OFF** (#49): `publish-play-store.yml` and `publish-fdroid.yml` live in `.github/workflows-disabled/` (Actions ignores that dir) and `release.yml` dispatches only `build.yml`. To re-enable: `git mv` them back to `.github/workflows/` and re-add them to the dispatch loop in `release.yml`. The service account and API grant are still valid. CI `packageName` = `cc.agentlabs.opencode`. NOTE: if re-enabled, the publish build needs the "Purge stale generated sources" step (commit 67e4c1f) or cached old-package autolinking breaks compile.
 - **Legacy app (orphaned)**: `ai.opencode.mobile`, app ID `4975545755653045321` — published v19 to internal track (run 26662900471), superseded by the rebrand.
 - **Track**: Internal testing (no review required, up to 100 testers)
 - **Service account**: `playstore-deploy@opencode-mobile-deploy.iam.gserviceaccount.com` (account-level API access already granted)
