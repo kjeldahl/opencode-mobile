@@ -133,7 +133,7 @@ jobs:
 
       # Tags pushed with GITHUB_TOKEN do not create workflow runs, so dispatch the
       # tag-triggered pipelines explicitly. Without this the tag would sit un-built.
-      - name: Trigger build and publish on the new tag
+      - name: Trigger the build on the new tag
         env:
           NEXT: ${{ steps.version.outputs.next }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
