@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 import { createMockOpencodeServer } from "../../tests/fixtures/mock-opencode-server.ts"
 import { createV2Client, mapMessage, V2EventTranslator, clearRememberedSessions } from "./sdk-v2.ts"
-import { detectServerMajor, clearServerMajorCache } from "./server-version.ts"
+import { detectServerMajor, clearServerMajorCache, cachedServerMajor } from "./server-version.ts"
 import type { Event, MessageWithParts } from "./sdk.ts"
 
 const capture = (name: string) => readFileSync(fileURLToPath(new URL(`../../docs/opencode-v2-port/${name}`, import.meta.url)), "utf8")
@@ -278,6 +278,24 @@ test("detectServerMajor: a 1.x server that 404s the probe is v1", async () => {
     assert.equal(await detectServerMajor({ baseUrl: mock.url, auth: AUTH }, { force: true }), "v1")
   } finally {
     await mock.close()
+  }
+})
+
+test("detectServerMajor: a waking forge workspace gets no verdict", async () => {
+  clearServerMajorCache()
+  const { createServer } = await import("node:http")
+  const waking = createServer((_req, res) => {
+    res.writeHead(503, { "X-Forge-State": "waking", "Retry-After": "5", "Content-Type": "application/json" })
+    res.end(JSON.stringify({ forge: { state: "waking" } }))
+  })
+  await new Promise<void>((resolve) => waking.listen(4214, "127.0.0.1", resolve))
+  try {
+    // Must not settle on v1: the same URL answers 2.x once it is awake.
+    assert.equal(cachedServerMajor({ baseUrl: "http://127.0.0.1:4214", auth: AUTH }), undefined)
+    await detectServerMajor({ baseUrl: "http://127.0.0.1:4214", auth: AUTH }, { force: true })
+    assert.equal(cachedServerMajor({ baseUrl: "http://127.0.0.1:4214", auth: AUTH }), undefined)
+  } finally {
+    await new Promise((resolve) => waking.close(resolve))
   }
 })
 

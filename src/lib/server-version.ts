@@ -23,6 +23,9 @@ export interface VersionProbeConfig {
 // the same URL must re-probe.
 const cache = new Map<string, ServerMajor>()
 
+// How long the probe waits for /api/info before it is treated as unreachable.
+const PROBE_TIMEOUT_MS = 10_000
+
 function key(config: VersionProbeConfig): string {
   return `${config.baseUrl.replace(/\/+$/, "")}::${config.auth?.username ?? ""}:${config.auth?.password ?? ""}`
 }
@@ -42,9 +45,11 @@ export async function detectServerMajor(
     if (cached) return cached
   }
 
-  const major = await probe(config, init.timeoutMs ?? 10_000)
-  cache.set(id, major)
-  return major
+  const verdict = await attempt(config, init.timeoutMs ?? PROBE_TIMEOUT_MS)
+  // A workspace that is only still starting gives no verdict — do not cache
+  // "v1" for it, or it would keep the wrong API family after it wakes.
+  if (verdict !== "waking") cache.set(id, verdict)
+  return verdict === "waking" ? cache.get(id) ?? "v1" : verdict
 }
 
 export function clearServerMajorCache(): void {
@@ -55,7 +60,7 @@ export function cachedServerMajor(config: VersionProbeConfig): ServerMajor | und
   return cache.get(key(config))
 }
 
-async function probe(config: VersionProbeConfig, timeoutMs: number): Promise<ServerMajor> {
+async function attempt(config: VersionProbeConfig, timeoutMs: number): Promise<ServerMajor | "waking"> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
@@ -63,7 +68,7 @@ async function probe(config: VersionProbeConfig, timeoutMs: number): Promise<Ser
       headers: buildRequestHeaders({ auth: config.auth }),
       signal: controller.signal,
     })
-    if (!response.ok) return "v1"
+    if (!response.ok) return isWaking(response.status, response.headers) ? "waking" : "v1"
 
     // A 1.x server answers this exact request with 200 + HTML, so the content
     // type is the check; a JSON body that is not 2.x is a 1.x (or future-shape)
@@ -79,4 +84,9 @@ async function probe(config: VersionProbeConfig, timeoutMs: number): Promise<Ser
   } finally {
     clearTimeout(timer)
   }
+}
+
+function isWaking(status: number, headers: Headers): boolean {
+  if (status !== 503) return false
+  return headers.get("x-forge-state") !== null
 }
