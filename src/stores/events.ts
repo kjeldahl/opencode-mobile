@@ -10,7 +10,7 @@ import { recordSuccessfulSession } from "../lib/store-review"
 import { isAuthError } from "../lib/api-error"
 import { isWorkspaceWakingError } from "../lib/forge"
 import { isSessionActuallyIdle } from "../lib/session-status-reconcile"
-import type { Client, Part, Session, Message } from "../lib/sdk"
+import type { Client, Part, Session, Message, PermissionRequest, QuestionRequest } from "../lib/sdk"
 
 // Session status from the server
 type SessionStatus = { type: "idle" } | { type: "busy" } | { type: "retry"; attempt: number; message: string }
@@ -29,32 +29,8 @@ interface EventsState {
   sessionStatus: Record<string, SessionStatus>
   statusText: Record<string, string>
   // Permissions & questions (pending per session)
-  permissions: Record<
-    string,
-    Array<{
-      id: string
-      sessionID: string
-      permission: string
-      patterns: string[]
-      metadata: Record<string, unknown>
-      tool?: { messageID: string; callID: string }
-    }>
-  >
-  questions: Record<
-    string,
-    Array<{
-      id: string
-      sessionID: string
-      questions: Array<{
-        question: string
-        header: string
-        options: Array<{ label: string; description: string }>
-        multiple?: boolean
-        custom?: boolean
-      }>
-      tool?: { messageID: string; callID: string }
-    }>
-  >
+  permissions: Record<string, PermissionRequest[]>
+  questions: Record<string, QuestionRequest[]>
 
   connect: () => void
   disconnect: () => void
@@ -79,11 +55,11 @@ const PROLONGED_DISCONNECT_MS = 30_000
 export async function refreshPending(client: Client, sessionID: string) {
   try {
     const [perms, questions] = await Promise.all([client.permission.list(), client.question.list()])
-    const sessionPerms = (perms || []).filter((p: Record<string, unknown>) => p.sessionID === sessionID)
-    const sessionQuestions = (questions || []).filter((q: Record<string, unknown>) => q.sessionID === sessionID)
+    const sessionPerms = (perms || []).filter((p) => p.sessionID === sessionID)
+    const sessionQuestions = (questions || []).filter((q) => q.sessionID === sessionID)
     useEvents.setState((state) => ({
-      permissions: { ...state.permissions, [sessionID]: sessionPerms as any },
-      questions: { ...state.questions, [sessionID]: sessionQuestions as any },
+      permissions: { ...state.permissions, [sessionID]: sessionPerms },
+      questions: { ...state.questions, [sessionID]: sessionQuestions },
     }))
   } catch (err) {
     console.warn("[Events] Failed to refresh pending:", err)
@@ -182,6 +158,12 @@ export const useEvents = create<EventsState>((set, get) => ({
       // failed retries can't re-arm the check on every attempt.
       const isReconnect = get().reconnectAttempts > 0
       let resyncedAfterReconnect = false
+      // A reconnect is the point where a server may have been upgraded (1.x ->
+      // 2.x) underneath a sleeping app: re-run the version probe first so this
+      // stream (and everything after it) talks to the right API family.
+      if (isReconnect) {
+        await client.global.detect(true).catch((err) => console.warn("[SSE] version re-detect failed:", err))
+      }
       const stableTimer = setTimeout(() => {
         if (!currentController.signal.aborted) {
           set({ reconnectAttempts: 0, lastDisconnectAt: null })
