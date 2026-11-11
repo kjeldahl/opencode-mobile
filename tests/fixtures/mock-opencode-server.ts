@@ -73,6 +73,7 @@
 
 import http from "node:http"
 import { randomUUID } from "node:crypto"
+import { installV2Api } from "./mock-opencode-server-v2.ts"
 
 export interface MockServerOptions {
   port: number
@@ -113,6 +114,14 @@ export interface MockServerOptions {
   forgePr?: Record<string, unknown>
   /** /__forge/pr answers 503 + X-Forge-State: asleep (the endpoint never wakes it). */
   forgeAsleep?: boolean
+  /**
+   * Serve the opencode **2.x** API instead of 1.x (`--v2`). Responses use the
+   * `{"data": …}` envelope, `?location[directory]=` scoping, newest-first
+   * cursor-paginated message lists and the granular `session.*` event stream,
+   * mirroring the captures in docs/opencode-v2-port/. Used by the adapter
+   * tests to exercise src/lib/sdk-v2.ts without a live 2.x server.
+   */
+  apiVersion?: "v1" | "v2"
 }
 
 interface StoredSession {
@@ -240,6 +249,7 @@ export function createMockOpencodeServer(opts: MockServerOptions) {
     seedDiff = false,
     forgePr,
     forgeAsleep = false,
+    apiVersion = "v1",
   } = opts
 
   const sessions = new Map<string, StoredSession>()
@@ -440,6 +450,10 @@ export function createMockOpencodeServer(opts: MockServerOptions) {
     res.on("finish", () => {
       console.log(`[mock-opencode-server] ${method} ${path} -> ${res.statusCode}`)
     })
+
+    // In --v2 mode the 2.x listener owns this request, including its 401 — the
+    // 1.x handlers below must not answer as well.
+    if (apiVersion === "v2") return
 
     if (failAuth) {
       unauthorized(res)
@@ -677,8 +691,14 @@ export function createMockOpencodeServer(opts: MockServerOptions) {
     json(res, 404, { error: `mock-opencode-server: no handler for ${method} ${path}` })
   })
 
+  // --v2 installs the 2.x API surface on top of the same http.Server; the 1.x
+  // handlers above stay registered but are never reached.
+  const v2 = apiVersion === "v2" ? installV2Api(server, { port, failAuth, replyText, replyDelayMs }) : null
+
   return {
     server,
+    /** Scripted 2.x interactions (permission/form asks) — null in 1.x mode. */
+    v2,
     url: `http://localhost:${port}`,
     listen(): Promise<void> {
       return new Promise((resolve) => server.listen(port, "0.0.0.0", () => resolve()))
@@ -699,9 +719,10 @@ export function createMockOpencodeServer(opts: MockServerOptions) {
   }
 }
 
-function parseArgs(argv: string[]): MockServerOptions & { failAuth: boolean; seedSessions: boolean; seedDiff: boolean } {
-  const opts: MockServerOptions & { failAuth: boolean; seedSessions: boolean; seedDiff: boolean } = {
+function parseArgs(argv: string[]): MockServerOptions & { failAuth: boolean; seedSessions: boolean; seedDiff: boolean; apiVersion: "v1" | "v2" } {
+  const opts: MockServerOptions & { failAuth: boolean; seedSessions: boolean; seedDiff: boolean; apiVersion: "v1" | "v2" } = {
     port: 4096,
+    apiVersion: "v1",
     failAuth: false,
     seedSessions: false,
     seedDiff: false,
@@ -712,6 +733,7 @@ function parseArgs(argv: string[]): MockServerOptions & { failAuth: boolean; see
     else if (argv[i] === "--seed-sessions") opts.seedSessions = true
     else if (argv[i] === "--seed-diff") opts.seedDiff = true
     else if (argv[i] === "--forge-pr") opts.forgePr = { [DEFAULT_DIRECTORY]: FORGE_PR }
+    else if (argv[i] === "--v2") opts.apiVersion = "v2"
   }
   return opts
 }

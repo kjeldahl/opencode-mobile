@@ -9,7 +9,7 @@
 //
 // So the decision is made on the content type + parse result, never on the
 // status code — and anything that is not 2.x JSON is treated as 1.x.
-import { buildRequestHeaders } from "./headers"
+import { buildRequestHeaders } from "./headers.ts"
 
 export type ServerMajor = "v1" | "v2"
 

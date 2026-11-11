@@ -9,10 +9,10 @@
 // `message.updated` / `message.part.updated` / `session.status` events the
 // sessions and events stores already dispatch on, so no screen or store had to
 // change.
-import { buildRequestHeaders } from "./headers"
-import { ApiError, apiErrorFor } from "./api-error"
-import { parseForgeState } from "./forge"
-import { forgePrPath, readForgePr, type ForgePr } from "./forge-pr"
+import { buildRequestHeaders } from "./headers.ts"
+import { ApiError, apiErrorFor } from "./api-error.ts"
+import { parseForgeState } from "./forge.ts"
+import { forgePrPath, readForgePr, type ForgePr } from "./forge-pr.ts"
 import type {
   Agent,
   Client,
@@ -30,7 +30,7 @@ import type {
   Session,
   VcsInfo,
   VcsMode,
-} from "./sdk"
+} from "./sdk.ts"
 
 export interface V2ClientConfig {
   baseUrl: string
@@ -279,6 +279,10 @@ type V2Event = { id?: string; created?: number; type: string; data?: Record<stri
 export class V2EventTranslator {
   private messages = new Map<string, Message>()
   private texts = new Map<string, string>()
+  // Provider tool ids carry only `name` on the first frame; later progress /
+  // success / error frames do not, so remember it to keep the part's tool set.
+  private toolNames = new Map<string, string>()
+  private toolMessages = new Map<string, string>()
 
   translate(event: V2Event): Event[] {
     const data = event.data ?? {}
@@ -300,8 +304,23 @@ export class V2EventTranslator {
     const type = event.type
     const sessionID = data.sessionID as string | undefined
     switch (type) {
-      case "session.created":
-        return [{ type: "session.created", properties: { info: mapSession(data as unknown as V2Session) } }]
+      case "session.created": {
+        // The 2.x event names the id `sessionID` (and carries no time), unlike
+        // the session GET — normalise so mapSession produces a real Session.
+        const created = data as Record<string, unknown>
+        return [
+          {
+            type: "session.created",
+            properties: {
+              info: mapSession({
+                ...created,
+                id: (created.sessionID as string) ?? (created.id as string),
+                time: { created: event.created, updated: event.created },
+              } as unknown as V2Session),
+            },
+          },
+        ]
+      }
 
       case "session.inbox.enqueued": {
         const item = data.item as { type?: string; payload?: { text?: string } } | undefined
@@ -457,10 +476,14 @@ export class V2EventTranslator {
   }
 
   private toolPart(data: Record<string, unknown>, via: string, state: NonNullable<Part["state"]>): Event[] {
-    const messageID = data.assistantMessageID as string
-    const sessionID = data.sessionID as string
-    const callID = data.id as string
-    if (!messageID || !callID) return []
+    const callID = data.id as string | undefined
+    if (!callID) return []
+    const known = this.toolNames.get(callID)
+    if (data.name) this.toolNames.set(callID, String(data.name))
+    const messageID = (data.assistantMessageID as string | undefined) ?? this.toolMessages.get(callID)
+    if (!messageID) return []
+    this.toolMessages.set(callID, messageID)
+    const sessionID = (data.sessionID as string | undefined) ?? ""
     return [
       {
         type: "message.part.updated",
@@ -470,7 +493,7 @@ export class V2EventTranslator {
             sessionID,
             messageID,
             type: "tool",
-            tool: v2ToolName(data.name as string | undefined),
+            tool: v2ToolName((data.name as string | undefined) ?? known),
             callID,
             state,
             time: { start: via.endsWith("started") ? Date.now() : undefined },

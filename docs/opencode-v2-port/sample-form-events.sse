@@ -1,0 +1,8 @@
+# Real question/form round trip captured from opencode 2.0.29 (2026-11-11).
+# The agent's question tool produced form.created; the client replied POST
+# /api/session/{sessionID}/form/{formID}/reply {answer:{q0:"Red"}} (204),
+# which produced form.replied. Pending forms list at GET /api/form.
+data: {"id": "evt_1cc2276a800237UM9FSxnG4vOI", "created": 1794426173096, "type": "form.created", "location": {"directory": "/tmp/permtest"}, "data": {"form": {"id": "frm_1cc2276a8001NEpUsRX6txMopI", "sessionID": "ses_e33dd939affeAMv6dl42tQZuE6", "title": "Questions", "metadata": {"kind": "question", "tool": {"messageID": "msg_1cc226c96001WIZFN1E9lr7a0U", "id": "call_8ad23cf181262162b94ffac5"}}, "fields": [{"key": "q0", "title": "Logo color", "description": "What color should the logo be?", "type": "string", "options": [{"value": "Red", "label": "Red", "description": "Use red for the logo."}, {"value": "Blue", "label": "Blue", "description": "Use blue for the logo."}], "custom": true}]}}}
+
+data: {"id": "evt_1cc251cf5001H9Rnt8a80qP4zJ", "created": 1794426346741, "type": "form.replied", "location": {"directory": "/tmp/permtest"}, "data": {"id": "frm_1cc2276a8001NEpUsRX6txMopI", "sessionID": "ses_e33dd939affeAMv6dl42tQZuE6", "answer": {"q0": "Red"}}}
+

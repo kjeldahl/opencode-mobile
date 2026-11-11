@@ -1,0 +1,8 @@
+# Real permission round trip captured from opencode 2.0.29 (2026-11-11).
+# Server config had permission.bash=ask; the client replied POST
+# /api/session/{sessionID}/permission/{requestID}/reply {decision:"once"},
+# which answered 204 and produced permission.replied.
+data: {"id": "evt_1cc21ae59002Ys96WY7l68O8bQ", "created": 1794426121817, "type": "permission.asked", "location": {"directory": "/tmp/permtest"}, "data": {"id": "per_1cc21ae590015nhfeancsYTtxD", "sessionID": "ses_e33de57cfffemGtguapj6e1ldW", "action": "shell", "resources": ["echo hello"], "save": ["echo *"], "source": {"type": "tool", "messageID": "msg_1cc21a9ef001BOni6Md9BkOnhW", "id": "call_f4c8d4df29be433fa503f14c"}}}
+
+data: {"id": "evt_1cc2216fe001DclTeQFNZD0JeY", "created": 1794426148606, "type": "permission.replied", "location": {"directory": "/tmp/permtest"}, "data": {"sessionID": "ses_e33de57cfffemGtguapj6e1ldW", "requestID": "per_1cc21ae590015nhfeancsYTtxD", "reply": "once"}}
+
