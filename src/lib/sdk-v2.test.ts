@@ -299,6 +299,21 @@ test("detectServerMajor: a waking forge workspace gets no verdict", async () => 
   }
 })
 
+test("client: delete and abort reach the 2.x routes", async () => {
+  clearServerMajorCache()
+  await withV2Mock(async ({ client, seen }) => {
+    const session = await client.session.create({ title: "lifecycle" })
+    assert.equal(await client.session.abort(session.id), true)
+    await waitFor(() => seen.find((e) => e.type === "session.status" && (e.properties as { status: { type: string } }).status.type === "idle"))
+    await client.session.delete(session.id)
+    const listed = await client.session.list()
+    assert.equal(
+      listed.some((s) => s.id === session.id),
+      false,
+    )
+  })
+})
+
 // --- client round trips against the 2.x mock ---------------------------------
 
 async function* openEvents(url: string, signal: AbortSignal): AsyncGenerator<Event> {
