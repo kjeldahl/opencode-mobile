@@ -489,7 +489,10 @@
     "body": "Version {{version}} is out. You're on {{current}}.",
     "action": "Get it",
     "dismiss": "Not now",
-    "upToDate": "Up to date"
+    "upToDate": "Up to date",
+    "checking": "Checking for updates…",
+    "checkFailed": "Couldn't reach GitHub — try again later",
+    "checkNowAccessibility": "Check for updates now"
   },
   "changes": {
     "title": "Changes",

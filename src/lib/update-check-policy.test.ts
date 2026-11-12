@@ -11,6 +11,7 @@ import {
   LAST_CHECK_KEY,
   LATEST_KEY,
   DISMISSED_KEY,
+  classifyCheck,
 } from "./update-check-policy.ts"
 
 test("parseVersion accepts the shapes our releases actually use", () => {
@@ -263,4 +264,21 @@ test("resolveUpdate: ignoreDismissed still reports a dismissed version (Settings
   })
 
   assert.equal(update?.version, "0.4.14")
+})
+
+// --- an explicit check the user asked for ------------------------------------
+
+test("classifyCheck: nothing fetched is unreachable, not 'latest'", () => {
+  assert.deepEqual(classifyCheck(null, "0.9.0"), { status: "unreachable" })
+})
+
+test("classifyCheck: a strictly newer release is an update", () => {
+  const latest = { version: "0.10.0", url: "https://github.com/kjeldahl/opencode-mobile/releases/tag/v0.10.0" }
+  assert.deepEqual(classifyCheck(latest, "0.9.0"), { status: "update", update: latest })
+})
+
+test("classifyCheck: same or older running version says you are up to date", () => {
+  const same = { version: "0.10.0", url: "u" }
+  assert.equal(classifyCheck(same, "0.10.0").status, "latest")
+  assert.equal(classifyCheck({ version: "0.9.1", url: "u" }, "0.10.0").status, "latest")
 })

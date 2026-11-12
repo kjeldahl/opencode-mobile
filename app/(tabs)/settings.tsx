@@ -9,6 +9,8 @@ import {
   useColorScheme,
   Linking,
   Alert,
+  ActivityIndicator,
+  Platform,
 } from "react-native"
 import { Ionicons } from "@expo/vector-icons"
 import { useTranslation } from "react-i18next"
@@ -21,10 +23,16 @@ import {
   granted as notificationsGranted,
 } from "../../src/lib/notifications"
 import type { Category } from "../../src/lib/notifications"
-import { CURRENT_VERSION, checkForUpdate, type AvailableUpdate } from "../../src/lib/update-check"
+import { CURRENT_VERSION, checkForUpdate, checkForUpdateNow, type AvailableUpdate } from "../../src/lib/update-check"
 import { BuildStampLinks } from "../../src/lib/build-info"
 
 import type { LocalePreference } from "../../src/lib/i18n/locale-resolve"
+
+// The update check only means something where we ship the binary ourselves.
+// TestFlight/App Store handle their own updates, and pointing an iOS user at a
+// GitHub APK is worse than saying nothing, so the row is not a button there.
+const updatesCheckable = Platform.OS === "android"
+
 function SettingRow({
   icon,
   label,
@@ -94,6 +102,23 @@ export default function SettingsScreen() {
       cancelled = true
     }
   }, [])
+
+  // Tapping the version row skips the 24h throttle. The answer is shown in the
+  // row itself, including "couldn't reach GitHub", so a check that could not
+  // run never reads as "you already have the latest".
+  const [checking, setChecking] = useState(false)
+  const [checkUnreachable, setCheckUnreachable] = useState(false)
+
+  const checkNow = useCallback(async () => {
+    if (checking || !updatesCheckable) return
+    setChecking(true)
+    setCheckUnreachable(false)
+    const result = await checkForUpdateNow()
+    if (result.status === "update") setUpdateAvailable(result.update)
+    if (result.status === "latest") setUpdateAvailable(null)
+    setCheckUnreachable(result.status === "unreachable")
+    setChecking(false)
+  }, [checking])
 
   // Check OS permission state on first toggle attempt
   const handleToggle = useCallback(
@@ -234,7 +259,15 @@ export default function SettingsScreen() {
           onPress={handleLanguagePress}
           right={<Ionicons name="chevron-forward" size={20} color={isDark ? "#666666" : "#999999"} />}
         />
-        <View style={styles.settingRow}>
+        <TouchableOpacity
+          style={styles.settingRow}
+          onPress={() => void checkNow()}
+          disabled={checking || !updatesCheckable}
+          activeOpacity={0.6}
+          accessibilityRole="button"
+          accessibilityLabel={t("update.checkNowAccessibility")}
+          testID="settings-check-update"
+        >
           <View style={[styles.settingIcon, isDark && styles.settingIconDark]}>
             <Ionicons name="information-circle" size={22} color={isDark ? "#ffffff" : "#0a0a0a"} />
           </View>
@@ -244,18 +277,26 @@ export default function SettingsScreen() {
                 additionally stamp the PR# and commit (build-info.json) so a
                 side-loaded CI APK says which pull request it came from. */}
             <Text style={[styles.settingDescription, isDark && styles.metaDark]}>
-              {updateAvailable
-                ? `${CURRENT_VERSION} → ${updateAvailable.version}`
-                : `${CURRENT_VERSION} · ${t("update.upToDate")}`}
+              {checking
+                ? t("update.checking")
+                : checkUnreachable
+                  ? t("update.checkFailed")
+                  : updateAvailable
+                    ? `${CURRENT_VERSION} → ${updateAvailable.version}`
+                    : `${CURRENT_VERSION} · ${t("update.upToDate")}`}
             </Text>
             <BuildStampLinks style={styles.settingDescription} />
           </View>
-          {updateAvailable && (
-            <TouchableOpacity onPress={() => Linking.openURL(updateAvailable.url)}>
-              <Ionicons name="arrow-up-circle" size={20} color={isDark ? "#7dd3fc" : "#0369a1"} />
-            </TouchableOpacity>
+          {checking ? (
+            <ActivityIndicator size="small" color={isDark ? "#7dd3fc" : "#0369a1"} />
+          ) : (
+            updateAvailable && (
+              <TouchableOpacity onPress={() => Linking.openURL(updateAvailable.url)} hitSlop={8}>
+                <Ionicons name="arrow-up-circle" size={20} color={isDark ? "#7dd3fc" : "#0369a1"} />
+              </TouchableOpacity>
+            )
           )}
-        </View>
+        </TouchableOpacity>
         <SettingRow
           icon="logo-github"
           label={t("settings.about.github.label")}

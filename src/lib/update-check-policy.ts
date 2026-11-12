@@ -101,6 +101,21 @@ export const LATEST_KEY = "opencode_update_latest"
 
 export type AvailableUpdate = { version: string; url: string }
 
+/** What an explicit "check for updates now" found. */
+export type UpdateCheckResult = { status: "update"; update: AvailableUpdate } | { status: "latest" } | { status: "unreachable" }
+
+/**
+ * Classify the outcome of a check the user asked for.
+ *
+ * A throttled check may stay silent on failure; a requested one may not,
+ * because to the user "I could not look" and "there is nothing newer" are the
+ * same blank face. This keeps them apart.
+ */
+export function classifyCheck(latest: AvailableUpdate | null, currentVersion: string): UpdateCheckResult {
+  if (!latest) return { status: "unreachable" }
+  return isNewer(latest.version, currentVersion) ? { status: "update", update: latest } : { status: "latest" }
+}
+
 /** The two storage calls this needs, injected so the logic stays testable. */
 export type UpdateStorage = {
   getItem: (key: string) => Promise<string | null>
