@@ -489,7 +489,10 @@
     "body": "版本 {{version}} 已发布，你当前使用的是 {{current}}。",
     "action": "去获取",
     "dismiss": "暂不",
-    "upToDate": "已是最新"
+    "upToDate": "已是最新",
+    "checking": "正在检查更新…",
+    "checkFailed": "无法连接到 GitHub — 请稍后再试",
+    "checkNowAccessibility": "立即检查更新"
   },
   "changes": {
     "title": "更改",

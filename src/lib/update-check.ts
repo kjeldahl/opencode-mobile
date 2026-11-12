@@ -31,12 +31,16 @@ import AsyncStorage from "@react-native-async-storage/async-storage"
 import appJson from "../../app.json"
 import {
   DISMISSED_KEY,
+  LAST_CHECK_KEY,
+  LATEST_KEY,
+  classifyCheck,
   resolveUpdate,
   type AvailableUpdate,
+  type UpdateCheckResult,
   type UpdateStorage,
 } from "./update-check-policy"
 
-export type { AvailableUpdate }
+export type { AvailableUpdate, UpdateCheckResult }
 
 /** The version in app.json; release tags (vX.Y.Z) must match it. */
 export const CURRENT_VERSION = (appJson as { expo?: { version?: string } }).expo?.version ?? "unknown"
@@ -97,4 +101,30 @@ export async function dismissUpdate(version: string): Promise<void> {
   } catch {
     // A dismissal we could not persist costs one extra banner, nothing more.
   }
+}
+
+/**
+ * The explicit "check for updates" path a user can ask for.
+ *
+ * The throttled checks deliberately say nothing when they fail, because a
+ * silent update check must not look like an error. Once the user *asks* for a
+ * check that changes: silence is indistinguishable from "you have the latest",
+ * so this reports which of the three answers it got instead of returning null
+ * for all of them.
+ */
+export async function checkForUpdateNow(): Promise<UpdateCheckResult> {
+  if (Platform.OS !== "android") return { status: "unreachable" }
+
+  const fetched = await fetchLatestRelease()
+  if (!fetched) return { status: "unreachable" }
+
+  // Persist exactly what the throttled check would have stored, so the banner
+  // and this row agree afterwards and the 24h clock starts from here.
+  const now = String(Date.now())
+  await Promise.all([
+    storage.setItem(LAST_CHECK_KEY, now).catch(() => undefined),
+    storage.setItem(LATEST_KEY, JSON.stringify(fetched)).catch(() => undefined),
+  ])
+
+  return classifyCheck(fetched, CURRENT_VERSION)
 }
