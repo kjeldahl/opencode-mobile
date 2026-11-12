@@ -1,0 +1,1 @@
+{"data":{"id":"ses_e3472121affe4vLPUtwHxSd4xs","projectID":"9d0a77c481d8da42e86ea6a51203ff1d08a43f01","cost":0,"tokens":{"input":11737,"output":31,"reasoning":76,"cache":{"read":11619,"write":0}},"outcome":"succeeded","time":{"created":1794416438769,"updated":1794416465033,"idle":1794416465037},"title":"probe","location":{"directory":"/home/agent/work/ruby-dcb"}}}

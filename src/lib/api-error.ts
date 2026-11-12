@@ -8,6 +8,23 @@
 // server is briefly unreachable" — a 401 got treated like any transient
 // failure and retried forever (see events.ts's reconnect loop / issue #76).
 
+// Shared API error types. Kept next to ApiAuthError so both sdk.ts (1.x) and
+// sdk-v2.ts (2.x) throw the *same* classes — call sites check
+// `err instanceof ApiError` (see sessions.ts revertToMessage) and must see one
+// identity, not one class per client.
+
+/** Thrown for a non-2xx response. Carries the HTTP status so callers can
+ *  distinguish e.g. 404 (older server, endpoint missing) from other failures
+ *  without parsing the message string. */
+export class ApiError extends Error {
+  readonly status: number
+  constructor(status: number, message: string) {
+    super(message)
+    this.name = "ApiError"
+    this.status = status
+  }
+}
+
 /** Thrown by sdk.ts's request()/events() when the server responds 401/403,
  *  so call sites can distinguish "bad credentials" from any other failure
  *  (network error, 5xx, timeout) instead of catching a generic Error. */
@@ -28,7 +45,7 @@ export function isAuthStatus(status: number): boolean {
 
 /** Build the right error type for a failed HTTP response. */
 export function apiErrorFor(status: number, message: string): Error {
-  return isAuthStatus(status) ? new ApiAuthError(status, message) : new Error(message)
+  return isAuthStatus(status) ? new ApiAuthError(status, message) : new ApiError(status, message)
 }
 
 /** Type guard for call sites (e.g. the SSE reconnect loop) that need to branch

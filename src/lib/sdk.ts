@@ -5,13 +5,16 @@
 import { fetch as expoFetch } from "expo/fetch"
 import { buildRequestHeaders } from "./headers"
 import { SSEParser } from "./sse"
-import { apiErrorFor } from "./api-error"
+import { apiErrorFor, ApiError } from "./api-error"
 import { parseForgeState } from "./forge"
 import { forgePrPath, readForgePr, type ForgePr } from "./forge-pr"
 import { loadSessionList } from "./session-list"
+import { detectServerMajor, type ServerMajor } from "./server-version"
+import { createV2Client, V2EventTranslator } from "./sdk-v2"
 import type { FileRoot } from "./file-roots"
 
 export { ApiAuthError, isAuthError } from "./api-error"
+export { ApiError } from "./api-error"
 export { WorkspaceWakingError, isWorkspaceWakingError } from "./forge"
 
 export interface ClientConfig {
@@ -200,19 +203,37 @@ export interface HealthResponse {
   version: string
 }
 
-const REQUEST_TIMEOUT_MS = 30_000
-
-// Thrown by request() on a non-2xx response. Carries the HTTP status so
-// callers can distinguish e.g. 404 (older server, endpoint missing) from
-// other failures without parsing the message string.
-export class ApiError extends Error {
-  status: number
-  constructor(status: number, body: string) {
-    super(`API Error: ${status} - ${body}`)
-    this.name = "ApiError"
-    this.status = status
-  }
+// A pending permission request, as both API families expose it. 1.x answers
+// `tool`/`input`; 2.x answers `action`/`resources`, which the adapter maps onto
+// the same `permission`/`patterns` fields the UI already renders
+// (PermissionPrompt.tsx).
+export interface PermissionRequest {
+  id: string
+  sessionID: string
+  permission: string
+  patterns: string[]
+  metadata?: Record<string, unknown>
+  tool?: { messageID?: string; callID?: string }
 }
+
+// A pending question. 1.x calls them questions, 2.x calls them forms; both map
+// onto this shape. `keys` carries the 2.x answer keys so replies can be keyed
+// correctly (the UI replies positionally).
+export interface QuestionRequest {
+  id: string
+  sessionID: string
+  questions: Array<{
+    question: string
+    header: string
+    options: Array<{ label: string; description: string }>
+    multiple?: boolean
+    custom?: boolean
+  }>
+  keys?: string[]
+  tool?: { messageID?: string; callID?: string }
+}
+
+const REQUEST_TIMEOUT_MS = 30_000
 
 function createHeaders(config: ClientConfig): HeadersInit {
   return buildRequestHeaders(config)
@@ -277,7 +298,7 @@ async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutM
   }
 }
 
-export function createClient(config: ClientConfig) {
+export function createV1Client(config: ClientConfig) {
   // Normalize once: a trailing slash on baseUrl (e.g. pasted into Advanced
   // mode or the Edit screen) would otherwise survive into every
   // `${config.baseUrl}${path}` concatenation below as a double slash, which
@@ -291,6 +312,10 @@ export function createClient(config: ClientConfig) {
       // onboarding connection test to fail fast on a bad/unreachable IP
       // instead of hanging for the full 30s (issue: first-run bounce).
       health: (timeoutMs?: number) => request<HealthResponse>(config, "/global/health", {}, timeoutMs),
+
+      // Probe of which API family this server speaks, cached per server.
+      // `force` re-probes — used by the SSE reconnect loop. See ./server-version.
+      detect: async (force?: boolean) => await detectServerMajor(config, { force }),
       // SSE event stream - returns async iterator
       // Pass an AbortSignal to cancel the connection
       async *events(signal?: AbortSignal): AsyncGenerator<Event> {
@@ -529,8 +554,7 @@ export function createClient(config: ClientConfig) {
     },
 
     permission: {
-      list: () =>
-        request<Array<{ id: string; sessionID: string; tool: string; input: unknown }>>(config, "/permission"),
+      list: () => request<PermissionRequest[]>(config, "/permission"),
 
       reply: (requestID: string, reply: "once" | "always" | "reject") =>
         request<boolean>(config, `/permission/${requestID}/reply`, {
@@ -540,7 +564,7 @@ export function createClient(config: ClientConfig) {
     },
 
     question: {
-      list: () => request<Array<{ id: string; sessionID: string; questions: unknown[] }>>(config, "/question"),
+      list: () => request<QuestionRequest[]>(config, "/question"),
 
       reply: (requestID: string, answers: string[][]) =>
         request<boolean>(config, `/question/${requestID}/reply`, {
@@ -594,4 +618,151 @@ export function createClient(config: ClientConfig) {
   }
 }
 
-export type Client = ReturnType<typeof createClient>
+export type Client = ReturnType<typeof createV1Client>
+
+// SSE stream against the 2.x `/api/event` endpoint. 2.x frames are
+// `data: {"id","created","type","location","data"}` plus `: heartbeat` comments,
+// and every event is granular (a `session.text.delta` is one chunk, not the
+// whole part). V2EventTranslator accumulates them into the complete
+// `message.part.updated`-style events the stores already dispatch on.
+async function* eventsV2(config: ClientConfig, signal?: AbortSignal): AsyncGenerator<Event> {
+  const translator = new V2EventTranslator()
+  const url = `${config.baseUrl}/api/event`
+  const headers = createHeaders(config)
+  delete (headers as Record<string, string>)["Content-Type"]
+
+  const response = await expoFetch(url, { headers, signal })
+  if (!response.ok || !response.body) {
+    const waking = parseForgeState(response.status, response.headers, "")
+    if (waking) throw waking
+    throw apiErrorFor(response.status, `Failed to connect to event stream: ${response.status}`)
+  }
+
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  const parser = new SSEParser()
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) {
+        console.log("[SSE] v2 stream ended")
+        break
+      }
+      for (const data of parser.push(decoder.decode(value, { stream: true }))) {
+        let raw: unknown
+        try {
+          raw = JSON.parse(data)
+        } catch (err) {
+          console.warn("[SSE] Failed to parse v2 event", {
+            length: data.length,
+            error: err instanceof Error ? err.message : String(err),
+          })
+          continue
+        }
+        const event = raw as { id?: string; created?: number; type: string; data?: Record<string, unknown> }
+        for (const mapped of translator.translate(event)) yield mapped
+      }
+    }
+  } finally {
+    reader.releaseLock()
+  }
+}
+
+/**
+ * Build a client for `config.baseUrl`, transparently speaking the 1.x or the
+ * 2.x API.
+ *
+ * The first call probes `GET /api/info` (see ./server-version) and every
+ * request afterwards goes to whichever implementation answered for that
+ * server, so the 1.x path keeps working exactly as before and 2.x workspaces
+ * need nothing special from the screens or stores. `global.detect(true)` is
+ * called by the SSE reconnect loop so a server upgraded in place is picked up
+ * without restarting the app.
+ */
+export function createClient(config: ClientConfig): Client {
+  const scoped: ClientConfig = { ...config, baseUrl: config.baseUrl.replace(/\/+$/, "") }
+  const v1 = createV1Client(scoped)
+  let current: { major: ServerMajor; client: Client } | null = null
+
+  const resolve = async (force = false): Promise<Client> => {
+    if (force || !current) {
+      const major = await detectServerMajor(scoped, { force })
+      current = {
+        major,
+        client: major === "v2" ? createV2Client(scoped, (signal) => eventsV2(scoped, signal)) : v1,
+      }
+    }
+    return current.client
+  }
+
+  return {
+    global: {
+      health: (timeoutMs?: number) => resolve().then((c) => c.global.health(timeoutMs)),
+      events: async function* (signal?: AbortSignal) {
+        const client = await resolve()
+        yield* client.global.events(signal)
+      },
+      detect: async (force?: boolean) => {
+        await resolve(force)
+        return (await current)?.major ?? "v1"
+      },
+    },
+    project: {
+      list: () => resolve().then((c) => c.project.list()),
+      current: () => resolve().then((c) => c.project.current()),
+    },
+    file: {
+      list: (params?: { path?: string }) => resolve().then((c) => c.file.list(params)),
+      roots: () => resolve().then((c) => c.file.roots()),
+    },
+    vcs: {
+      get: () => resolve().then((c) => c.vcs.get()),
+      diff: (mode: VcsMode) => resolve().then((c) => c.vcs.diff(mode)),
+    },
+    forge: {
+      pr: (directory: string, refresh?: boolean) => resolve().then((c) => c.forge.pr(directory, refresh)),
+    },
+    path: {
+      get: () => resolve().then((c) => c.path.get()),
+    },
+    session: {
+      list: (params?: { roots?: boolean; limit?: number; search?: string }) => resolve().then((c) => c.session.list(params)),
+      get: (sessionID: string) => resolve().then((c) => c.session.get(sessionID)),
+      create: (params?: { title?: string }) => resolve().then((c) => c.session.create(params)),
+      delete: (sessionID: string) => resolve().then((c) => c.session.delete(sessionID)),
+      update: (sessionID: string, params: { title?: string; time?: { archived?: number } }) =>
+        resolve().then((c) => c.session.update(sessionID, params)),
+      messages: (sessionID: string, params?: { limit?: number }) => resolve().then((c) => c.session.messages(sessionID, params)),
+      prompt: (sessionID: string, params: Parameters<Client["session"]["prompt"]>[1]) =>
+        resolve().then((c) => c.session.prompt(sessionID, params)),
+      command: (sessionID: string, params: Parameters<Client["session"]["command"]>[1]) =>
+        resolve().then((c) => c.session.command(sessionID, params)),
+      abort: (sessionID: string) => resolve().then((c) => c.session.abort(sessionID)),
+      diff: (sessionID: string, messageID?: string) => resolve().then((c) => c.session.diff(sessionID, messageID)),
+      revert: (sessionID: string, messageID: string, partID?: string) =>
+        resolve().then((c) => c.session.revert(sessionID, messageID, partID)),
+      unrevert: (sessionID: string) => resolve().then((c) => c.session.unrevert(sessionID)),
+    },
+    permission: {
+      list: () => resolve().then((c) => c.permission.list()),
+      reply: (requestID: string, reply: "once" | "always" | "reject") => resolve().then((c) => c.permission.reply(requestID, reply)),
+    },
+    question: {
+      list: () => resolve().then((c) => c.question.list()),
+      reply: (requestID: string, answers: string[][]) => resolve().then((c) => c.question.reply(requestID, answers)),
+      reject: (requestID: string) => resolve().then((c) => c.question.reject(requestID)),
+    },
+    agent: {
+      list: () => resolve().then((c) => c.agent.list()),
+    },
+    command: {
+      list: () => resolve().then((c) => c.command.list()),
+    },
+    provider: {
+      list: () => resolve().then((c) => c.provider.list()),
+    },
+    config: {
+      get: () => resolve().then((c) => c.config.get()),
+    },
+  }
+}

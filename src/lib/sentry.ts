@@ -23,7 +23,10 @@ export function captureException(
 }
 
 export function captureDiagnostic(report: DiagnosticReport) {
-  log.info("diag", "connect failed", report.classification)
+  // "connect failed" was logged for every report, including ones that ended in
+  // `ok` — so a shared report could read "connect failed ok" and look broken
+  // while describing a working connection.
+  log.info("diag", report.classification === "ok" ? "connect succeeded" : "connect failed", report.classification)
 }
 
 function toError(value: unknown): Error {

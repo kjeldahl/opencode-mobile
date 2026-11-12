@@ -7,6 +7,7 @@ import * as Device from "expo-device"
 import appJson from "../../app.json"
 import { log, formatLogLines } from "./logbuffer"
 import { type Classification, type ProbeAttempt, type ParsedUrl, parseUrl, classify } from "./diagnostics-classify"
+import { isJsonContentType } from "./server-version"
 import { redactHostAndUrls } from "./scrub"
 
 export type { Classification, ProbeAttempt } from "./diagnostics-classify"
@@ -23,6 +24,10 @@ export interface DiagnosticReport {
   host?: string
   port?: string
   isHostname: boolean
+  // Which API family the server answered /api/info with, and the version it
+  // reported. Undefined when that probe could not reach the server.
+  apiMajor?: "v1" | "v2"
+  apiVersion?: string
   attempts: ProbeAttempt[]
   device: {
     platform: string
@@ -39,14 +44,39 @@ export interface DiagnosticReport {
 // made classify() short-circuit to "connection actually works now" even when
 // auth failed or the server errored. The root probe only checks reachability
 // (any HTTP response, even an error status, proves something is listening).
-async function timedFetch(name: string, target: string, init?: RequestInit, opts?: { requireOk?: boolean }): Promise<ProbeAttempt> {
+// readBody: also record the response's content type (and the JSON version, if
+// any). Needed because both majors answer 200 + HTML for paths they do not
+// implement, so a status code alone cannot tell an API from a web app.
+async function timedFetch(
+  name: string,
+  target: string,
+  init?: RequestInit,
+  opts?: { requireOk?: boolean; readBody?: boolean },
+): Promise<ProbeAttempt> {
   const requireOk = opts?.requireOk ?? true
   const start = Date.now()
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS)
   try {
     const res = await fetch(target, { ...init, signal: controller.signal })
-    return { name, target, ok: requireOk ? res.ok : true, status: res.status, durationMs: Date.now() - start }
+    const contentType = res.headers.get("content-type") ?? undefined
+    let version: string | undefined
+    if (opts?.readBody) {
+      const text = await res.text()
+      const parsed = safeJson(text)
+      if (parsed && typeof (parsed as { version?: unknown }).version === "string") {
+        version = (parsed as { version: string }).version
+      }
+    }
+    return {
+      name,
+      target,
+      ok: requireOk ? res.ok : true,
+      status: res.status,
+      durationMs: Date.now() - start,
+      contentType,
+      version,
+    }
   } catch (error: unknown) {
     const err = error as { name?: string; message?: string; cause?: unknown }
     const aborted = err?.name === "AbortError"
@@ -60,6 +90,14 @@ async function timedFetch(name: string, target: string, init?: RequestInit, opts
     }
   } finally {
     clearTimeout(timer)
+  }
+}
+
+function safeJson(text: string): unknown {
+  try {
+    return JSON.parse(text) as unknown
+  } catch {
+    return null
   }
 }
 
@@ -79,15 +117,35 @@ export async function probeConnection(url: string, auth?: { username: string; pa
   let health: ProbeAttempt
   let root: ProbeAttempt
   let internet: ProbeAttempt
+  let info: ProbeAttempt | undefined
+  let major: "v1" | "v2" | undefined
 
   if (parsed.valid) {
     const base = `${parsed.scheme}://${parsed.host}:${parsed.port}`
-    ;[health, root, internet] = await Promise.all([
-      timedFetch("health", `${base}/global/health`, { headers }),
+    // /api/info first: it is what the app itself probes to choose an API
+    // family, and it answers even when the status code is an error, so it tells
+    // us *which* server we are diagnosing before we interpret anything else.
+    const apiInfo = await timedFetch("api-info", `${base}/api/info`, { headers }, { requireOk: false, readBody: true })
+    apiInfo.authProvided = Boolean(auth?.password)
+    info = apiInfo
+    if (!apiInfo.error) {
+      major = isJsonContentType(apiInfo.contentType) && /^([2-9])\./.test(apiInfo.version ?? "") ? "v2" : "v1"
+    }
+
+    const answered = apiInfo.status != null && apiInfo.status < 400
+    if (major === "v2") {
+      // 2.x has no /global/health; its version route is its health check (the
+      // same call client.global.health makes). HTML here means no API.
+      health = { ...apiInfo, name: "health", ok: answered && isJsonContentType(apiInfo.contentType) }
+    } else {
+      health = await timedFetch("health", `${base}/global/health`, { headers })
+      health.authProvided = Boolean(auth?.password)
+    }
+
+    ;[root, internet] = await Promise.all([
       timedFetch("server-root", `${base}/`, { headers }, { requireOk: false }),
       timedFetch("internet", INTERNET_CHECK_URL),
     ])
-    health.authProvided = Boolean(auth?.password)
   } else {
     const skipped: ProbeAttempt = { name: "health", target: url, ok: false, durationMs: 0, error: "skipped: malformed url" }
     health = skipped
@@ -95,7 +153,11 @@ export async function probeConnection(url: string, auth?: { username: string; pa
     internet = await timedFetch("internet", INTERNET_CHECK_URL)
   }
 
-  const { classification, summary } = classify(parsed, health, internet, root)
+  const { classification, summary } = classify(parsed, health, internet, root, {
+    major,
+    healthPath: major === "v2" ? "/api/info" : "/global/health",
+  })
+  log.info("diag", "api probe", major ?? "unknown", info?.version ?? "", info?.contentType ?? "")
 
   const report: DiagnosticReport = {
     classification,
@@ -105,7 +167,9 @@ export async function probeConnection(url: string, auth?: { username: string; pa
     host: parsed.host,
     port: parsed.port,
     isHostname: parsed.isHostname,
-    attempts: [health, root, internet],
+    apiMajor: major,
+    apiVersion: info?.version,
+    attempts: [...(info && info.name !== health.name ? [info] : []), health, root, internet],
     device: {
       platform: Platform.OS,
       osVersion: String(Platform.Version),
@@ -129,6 +193,7 @@ export function formatReport(report: DiagnosticReport): string {
   lines.push(`Target URL:  ${report.url}`)
   lines.push(`  scheme=${report.scheme} host=${report.host} port=${report.port} hostname=${report.isHostname}`)
   lines.push("")
+  lines.push(`API:         ${report.apiMajor ? `detected ${report.apiMajor}` : "unknown (could not probe /api/info)"}${report.apiVersion ? ` version ${report.apiVersion}` : ""}`)
   lines.push("Probes:")
   for (const a of report.attempts) {
     const status = a.ok ? `OK ${a.status ?? ""}`.trim() : `FAIL ${a.error ?? ""}`.trim()

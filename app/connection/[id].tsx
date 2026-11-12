@@ -103,6 +103,18 @@ export default function EditConnectionScreen() {
       return
     }
 
+    // Still waking is not a failure and not worth a diagnostic report — the
+    // report would only contradict itself a second later, which is what the
+    // button used to do for sleeping workspaces.
+    if (result.wakeSeconds !== undefined) {
+      setIsTesting(false)
+      Alert.alert(
+        t("sessionsList.empty.workspaceWakingTitle"),
+        t("sessionsList.empty.workspaceWakingCountdown", { seconds: Math.ceil(result.wakeSeconds) }),
+      )
+      return
+    }
+
     // Failed: run active diagnostics, capture to Sentry, offer a shareable report.
     const report = await probeConnection(url.trim(), buildAuth(username, password))
     captureDiagnostic(report)

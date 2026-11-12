@@ -23,6 +23,12 @@ export interface ProbeAttempt {
   error?: string
   errorCause?: string
   authProvided?: boolean
+  // Content type of a 2xx/4xx HTTP answer, when the probe read it. This is the
+  // only reliable way to tell an API response from the web-app HTML a 1.x or
+  // 2.x server serves for paths it does not implement.
+  contentType?: string
+  // The `version` field, for a JSON /api/info answer.
+  version?: string
 }
 
 export interface ParsedUrl {
@@ -50,9 +56,27 @@ export function classify(
   health: ProbeAttempt,
   internet: ProbeAttempt,
   root: ProbeAttempt,
+  meta: { major?: "v1" | "v2"; healthPath?: string } = {},
 ): { classification: Classification; summary: string } {
+  const healthPath = meta.healthPath ?? "/global/health"
   if (!parsed.valid) {
     return { classification: "malformed-url", summary: "The server URL could not be parsed. Check for typos or extra characters." }
+  }
+  // A 200 that carries the web app instead of JSON is not a working API. Both
+  // majors serve their UI for any path they do not implement (verified on
+  // 1.18.32 and 2.0.29: `/global/health` answers 200 + HTML on a 2.x server),
+  // so "200 OK" on its own used to report a server that was never answering
+  // API calls as healthy. This is checked before the `ok` short-circuit so no
+  // caller can pass an HTML answer and have it read as success.
+  const answersHtml = health.contentType !== undefined && !health.contentType.includes("application/json") && (health.status ?? 0) < 400
+  if (answersHtml) {
+    return {
+      classification: "health-failed",
+      summary:
+        `The server answered ${healthPath} with ${health.contentType} instead of JSON, so no opencode API is listening at ` +
+        `${parsed.host}:${parsed.port}. That HTML is a web app or a proxy page, not an API response: check the port (opencode ` +
+        "listens on 4096 by default), the path, or whether something else answers on that port.",
+    }
   }
   if (health.ok) {
     return { classification: "ok", summary: "Health endpoint responded — connection actually works now." }
@@ -106,7 +130,10 @@ export function classify(
   // probe (captive portal, no WAN but Tailscale LAN still up, etc.) must not
   // override it and misreport a reachable server as "no internet".
   if (root.ok) {
-    return { classification: "health-failed", summary: `Server is reachable but /global/health failed (HTTP ${health.status ?? "error"}). Likely a wrong path or an old server version.` }
+    return {
+      classification: "health-failed",
+      summary: `Server is reachable but ${healthPath} failed (HTTP ${health.status ?? "error"}). Likely a wrong path or an old server version.`,
+    }
   }
   if (!internet.ok) {
     return { classification: "no-internet", summary: "The device has no working internet/network at all (public check also failed). Check Wi-Fi/data and Tailscale (VPN) status." }

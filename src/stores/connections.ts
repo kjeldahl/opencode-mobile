@@ -92,7 +92,7 @@ interface ConnectionsState {
     connection: ServerConnection,
     source: ConnectionTestSource,
     password?: string,
-  ) => Promise<{ ok: boolean; error?: string }>
+  ) => Promise<{ ok: boolean; error?: string; wakeSeconds?: number }>
   updateConnection: (id: string, updates: Partial<ServerConnection>, password?: string) => Promise<void>
   refreshProject: () => Promise<void>
   // Create a one-off client pointing at a specific directory (for cross-project operations).
@@ -283,19 +283,32 @@ export const useConnections = create<ConnectionsState>((set, get) => ({
 
   testConnection: async (connection, source, password) => {
     track(AnalyticsEvent.ConnectionAttempted, { source })
-    try {
-      const client = createClient({
-        baseUrl: connection.url,
-        directory: connection.directory,
-        auth: buildAuth(connection.username, password),
-      })
+    const client = createClient({
+      baseUrl: connection.url,
+      directory: connection.directory,
+      auth: buildAuth(connection.username, password),
+    })
 
-      await client.global.health(CONNECTION_TEST_TIMEOUT_MS)
+    // A sleeping forge workspace answers 503 + X-Forge-State. That is not a
+    // failed connection — the probe itself wakes the server — so keep probing
+    // inside the same budget. Reporting it as a failure made the "Test
+    // connection" button show a scary report that then said the connection
+    // works (it does; the report ran a second later, against the woken server).
+    let wakeSeconds: number | undefined
+    try {
+      await untilAwake(() => client.global.health(CONNECTION_TEST_TIMEOUT_MS), {
+        sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+        deadlineMs: CONNECTION_TEST_TIMEOUT_MS,
+        onState: (info) => {
+          wakeSeconds = info.wakeSeconds
+        },
+      })
       track(AnalyticsEvent.ConnectionSucceeded, { source })
       return { ok: true }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       track(AnalyticsEvent.ConnectionFailed, { source, error_class: classifyConnectionError(message) })
+      if (isWorkspaceWakingError(error)) return { ok: false, error: message, wakeSeconds }
       return { ok: false, error: message }
     }
   },
