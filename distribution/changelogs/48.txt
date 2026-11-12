@@ -1,0 +1,5 @@
+v0.10.0
+
+- Support opencode 2.x servers alongside 1.x (per-connection API detection) (#51)
+- docs: publishing parked, CI caching notes; metro-cache devDependency (#50)
+- ci: ccache, Metro cache, main-only cache writes; park play/fdroid publish (#49)
