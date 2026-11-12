@@ -356,6 +356,32 @@ export class V2EventTranslator {
       case "session.execution.interrupted":
         return [{ type: "session.status", properties: { sessionID, status: { type: "idle" } } }]
 
+      // 2.x keeps a pending revert across the "edit message" pause and commits
+      // it itself when the next prompt arrives, so the transcript is rewritten
+      // without any API call the app made. The transcript hides everything after
+      // the pending revert point, so these must reach the store: staged sets the
+      // marker, committed/cleared drop it — otherwise the banner stays up and
+      // the re-sent message plus its reply stay hidden.
+      case "session.revert.staged": {
+        const staged = data.revert as { messageID?: string; partID?: string } | undefined
+        if (!sessionID || !staged?.messageID) return []
+        return [{ type: "session.revert", properties: { sessionID, revert: { messageID: staged.messageID, partID: staged.partID } } }]
+      }
+
+      case "session.revert.committed": {
+        const to = data.to as string | undefined
+        if (!sessionID) return []
+        return [
+          {
+            type: "session.revert",
+            properties: { sessionID, revert: undefined, ...(to ? { droppedFrom: to } : {}) },
+          },
+        ]
+      }
+
+      case "session.revert.cleared":
+        return sessionID ? [{ type: "session.revert", properties: { sessionID, revert: undefined } }] : []
+
       case "session.step.started":
         return [
           {
@@ -751,7 +777,10 @@ export function createV2Client(config: V2ClientConfig, eventsFor: (signal?: Abor
         let cursor: string | undefined
         for (let page = 0; page < MAX_SESSION_PAGES; page++) {
           const params = new URLSearchParams({ order: "desc", limit: "50" })
-          if (cursor) params.set("cursor", String(cursor))
+          if (cursor) {
+            params.delete("order")
+            params.set("cursor", String(cursor))
+          }
           const body = await request<unknown>(config, withLocation(`/api/session?${params.toString()}`, directory))
           const pageData = (body ?? {}) as { data?: V2Session[]; cursor?: { previous?: string | null; next?: string | null } }
           sessions.push(...(pageData.data ?? []).map(mapSession))
@@ -787,8 +816,15 @@ export function createV2Client(config: V2ClientConfig, eventsFor: (signal?: Abor
         if (limit) query.set("limit", String(limit))
         let cursor: string | undefined
         for (let page = 0; page < MAX_MESSAGE_PAGES; page++) {
-          const url = cursor ? `${query.toString()}&cursor=${encodeURIComponent(cursor)}` : query.toString()
-          const body = await request<unknown>(config, `/api/session/${sessionID}/message?${url}`)
+          const query = new URLSearchParams({ order: "desc" })
+          if (limit) query.set("limit", String(limit))
+          if (cursor) {
+            // 2.x rejects a cursor combined with `order` (InvalidCursorError);
+            // the cursor already carries the direction it was taken in.
+            query.delete("order")
+            query.set("cursor", cursor)
+          }
+          const body = await request<unknown>(config, `/api/session/${sessionID}/message?${query.toString()}`)
           const pageData = (body ?? {}) as { data?: V2Message[]; cursor?: { previous?: string | null } }
           // `order=desc` hands us newest-first; unshifting each entry turns
           // that back into the oldest-first order the transcripts expect.

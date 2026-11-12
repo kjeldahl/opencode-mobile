@@ -68,21 +68,40 @@ async function attempt(config: VersionProbeConfig, timeoutMs: number): Promise<S
       headers: buildRequestHeaders({ auth: config.auth }),
       signal: controller.signal,
     })
-    if (!response.ok) return isWaking(response.status, response.headers) ? "waking" : "v1"
-
-    // A 1.x server answers this exact request with 200 + HTML, so the content
-    // type is the check; a JSON body that is not 2.x is a 1.x (or future-shape)
-    // server we must keep talking to over the 1.x routes.
-    const contentType = response.headers.get("content-type") || ""
-    if (!contentType.includes("application/json")) return "v1"
-
-    const body = (await response.json()) as { version?: unknown }
-    const version = typeof body?.version === "string" ? body.version : ""
-    return /^([2-9])\./.test(version) ? "v2" : "v1"
+    // A forge front that is still starting the workspace answers everything
+    // itself; that says nothing about the server behind it.
+    if (isWaking(response.status, response.headers)) return "waking"
+    return majorFromResponse(response.headers.get("content-type"), await readBody(response))
   } catch {
     return "v1"
   } finally {
     clearTimeout(timer)
+  }
+}
+
+/**
+ * Decide the API family from a `GET /api/info` answer, using only the content
+ * type and the parsed version — never the status code. Both majors answer 200
+ * to unknown paths (2.x serves its SPA, 1.x its web app), and a 2.x server can
+ * return its JSON version route with an error status, so status proves nothing.
+ */
+export function majorFromResponse(contentType: string | null, body: unknown): ServerMajor {
+  if (!isJsonContentType(contentType)) return "v1"
+  const version = (body as { version?: unknown })?.version
+  return /^([2-9])\./.test(typeof version === "string" ? version : "") ? "v2" : "v1"
+}
+
+export function isJsonContentType(contentType?: string | null): boolean {
+  return (contentType ?? "").includes("application/json")
+}
+
+// A 1.x server returns its HTML page here, so the body may not be JSON at all.
+async function readBody(response: Response): Promise<unknown> {
+  const text = await response.text()
+  try {
+    return JSON.parse(text) as unknown
+  } catch {
+    return null
   }
 }
 

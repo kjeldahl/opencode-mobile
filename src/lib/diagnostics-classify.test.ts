@@ -215,3 +215,32 @@ test("server-unreachable adds MagicDNS hint only for hostnames, not IPs", () => 
   assert.match(hostR.summary, /MagicDNS/)
   assert.doesNotMatch(ipR.summary, /MagicDNS/)
 })
+
+// ---------------- the 200-is-not-JSON case ----------------
+
+test("a 200 whose body is HTML is not reported as a working API", () => {
+  const r = classify(okUrl, probe({ ok: true, status: 200, contentType: "text/html" }), probe({ ok: true }), probe({ ok: true }))
+  assert.equal(r.classification, "health-failed")
+  assert.match(r.summary, /instead of JSON/)
+})
+
+test("that summary points at the route actually probed", () => {
+  const r = classify(okUrl, probe({ ok: false, status: 500 }), probe({ ok: true }), probe({ ok: true }), {
+    major: "v2",
+    healthPath: "/api/info",
+  })
+  assert.match(r.summary, /\/api\/info/)
+})
+
+test("JSON answers keep classifying as before", () => {
+  const healthy = probe({ ok: true, status: 200, contentType: "application/json", version: "2.0.29" })
+  assert.equal(classify(okUrl, healthy, probe({ ok: true }), probe({ ok: true })).classification, "ok")
+  const denied = classify(
+    okUrl,
+    probe({ ok: false, status: 401, contentType: "application/json", authProvided: true }),
+    probe({ ok: true }),
+    probe({ ok: true }),
+    { major: "v2", healthPath: "/api/info" },
+  )
+  assert.equal(denied.classification, "auth-failed")
+})

@@ -507,6 +507,33 @@ export const useSessions = create<SessionsState>((set, get) => ({
         break
       }
 
+      // Only the 2.x stream emits this: commit/clear happen server-side without
+      // an API call from the app, so this is the only way the pending-revert
+      // marker (and the transcript filtering that follows it) stays honest.
+      case "session.revert": {
+        const sessionID = props.sessionID as string
+        if (!sessionID) return
+        const revert = props.revert as Session["revert"]
+        // A commit also drops the edited message and everything after it, and
+        // 2.x does that without naming messages — `droppedFrom` is the first
+        // dropped id, and the same id comparison the transcript filter uses
+        // decides what goes. Without this the pre-edit exchange would reappear
+        // next to the new one the moment the marker clears.
+        const droppedFrom = props.droppedFrom as string | undefined
+        const drops = droppedFrom !== undefined && get().currentSession?.id === sessionID
+        set((state) => {
+          const messages = drops ? state.messages.filter((m) => m.id.startsWith("temp-") || m.id < droppedFrom) : state.messages
+          const keep = new Set(messages.map((m) => m.id))
+          return {
+            messages,
+            parts: drops ? Object.fromEntries(Object.entries(state.parts).filter(([id]) => keep.has(id))) : state.parts,
+            sessions: state.sessions.map((s) => (s.id === sessionID ? { ...s, revert } : s)),
+            currentSession: state.currentSession?.id === sessionID ? { ...state.currentSession, revert } : state.currentSession,
+          }
+        })
+        break
+      }
+
       case "session.updated": {
         const session = (props.info || props) as Session | undefined
         if (!session?.id) return

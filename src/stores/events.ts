@@ -320,6 +320,16 @@ export const useEvents = create<EventsState>((set, get) => ({
               break
             }
 
+            case "session.revert": {
+              // 2.x commits or clears a pending revert on its own (the next
+              // prompt commits it), so the app learns about it only from the
+              // stream. Patching just the marker keeps the rest of the session.
+              const sessionID = props.sessionID as string
+              if (!sessionID) break
+              useSessions.getState().handleEvent({ type, properties: props } as any)
+              break
+            }
+
             case "session.updated": {
               const info = props.info as Session | undefined
               if (!info) break

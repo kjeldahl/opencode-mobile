@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 import { createMockOpencodeServer } from "../../tests/fixtures/mock-opencode-server.ts"
 import { createV2Client, mapMessage, V2EventTranslator, clearRememberedSessions } from "./sdk-v2.ts"
-import { detectServerMajor, clearServerMajorCache, cachedServerMajor } from "./server-version.ts"
+import { detectServerMajor, clearServerMajorCache, cachedServerMajor, majorFromResponse } from "./server-version.ts"
 import type { Event, MessageWithParts } from "./sdk.ts"
 
 const capture = (name: string) => readFileSync(fileURLToPath(new URL(`../../docs/opencode-v2-port/${name}`, import.meta.url)), "utf8")
@@ -311,6 +311,58 @@ test("client: delete and abort reach the 2.x routes", async () => {
       listed.some((s) => s.id === session.id),
       false,
     )
+  })
+})
+
+test("majorFromResponse: only 2.x JSON counts as v2 — status is irrelevant", () => {
+  assert.equal(majorFromResponse("application/json", { version: "2.0.29" }), "v2")
+  assert.equal(majorFromResponse("application/json; charset=utf-8", { version: "2.2.7" }), "v2")
+  // A 1.x server answers this exact URL with 200 + its web app.
+  assert.equal(majorFromResponse("text/html", "<!doctype html>"), "v1")
+  assert.equal(majorFromResponse(null, null), "v1")
+  // A 2.x-shaped version in a JSON body we cannot trust as a 2.x server only if
+  // it is 1.x JSON — 1.x never reports a 2.x version.
+  assert.equal(majorFromResponse("application/json", { version: "1.18.32" }), "v1")
+  assert.equal(majorFromResponse("application/json", null), "v1")
+})
+
+test("V2EventTranslator: revert events keep the pending-revert marker in sync", () => {
+  const staged = replay([{ type: "session.revert.staged", data: { sessionID: "ses_1", revert: { messageID: "msg_user1", files: [] } } }])
+  assert.equal(staged.length, 1)
+  assert.deepEqual((staged[0].properties as { revert: { messageID: string } }).revert, { messageID: "msg_user1", partID: undefined })
+
+  // 2.x commits the staged revert itself when the next prompt arrives, and the
+  // transcript filter is driven purely by this marker. A commit also drops the
+  // edited message and everything after it, named only by the first id.
+  const committed = replay([{ type: "session.revert.committed", data: { sessionID: "ses_1", to: "msg_user1" } }])
+  assert.equal(committed.length, 1)
+  assert.equal((committed[0].properties as { revert?: unknown }).revert, undefined)
+  assert.equal((committed[0].properties as { droppedFrom?: string }).droppedFrom, "msg_user1")
+
+  const cleared = replay([{ type: "session.revert.cleared", data: { sessionID: "ses_1" } }])
+  assert.equal(cleared.length, 1)
+  assert.equal((cleared[0].properties as { revert?: unknown }).revert, undefined)
+  assert.equal(cleared[0].properties.droppedFrom, undefined)
+})
+
+test("client: pages a long transcript without combining cursor and order", async () => {
+  clearServerMajorCache()
+  await withV2Mock(async ({ client, mock }) => {
+    const session = await client.session.create({ title: "paging" })
+    // 4 pairs = 8 entries, and the mock hands out 4 per page, so this read must
+    // follow at least one cursor.
+    mock.v2?.seedHistory(session.id, 4)
+    const list = await client.session.messages(session.id)
+    assert.equal(list.length, 8, "every page must be followed")
+    assert.equal(new Set(list.map((m) => m.info.id)).size, 8, "no duplicate messages across pages")
+    // Oldest-first for the stores, newest-first on the wire.
+    assert.deepEqual(
+      list.map((m) => m.info.role),
+      ["user", "assistant", "user", "assistant", "user", "assistant", "user", "assistant"],
+    )
+    const texts = list.map((m) => (m.parts.find((p) => p.type === "text") as { text?: string } | undefined)?.text ?? "")
+    assert.match(texts[0], /older question 0/)
+    assert.match(texts[6], /older question 3/)
   })
 })
 

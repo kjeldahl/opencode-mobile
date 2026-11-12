@@ -63,6 +63,9 @@ interface PendingForm {
 }
 
 const V2_VERSION = "2.0.29-mock"
+// How many transcript entries an unlimited GET /message hands back, so the
+// cursor path gets exercised the way a real 2.x server exercises it.
+const MESSAGE_PAGE_SIZE = 4
 
 const DEFAULT_REPLY_TEXT = "14 — the number of entries. (mock v2 reply)"
 
@@ -421,15 +424,31 @@ export function installV2Api(server: import("node:http").Server, options: V2Mock
     if (messageListMatch && method === "GET") {
       const session = sessions.get(messageListMatch[1])
       if (!session) return json(res, 404, { _tag: "SessionNotFoundError" })
+      const cursor = url.searchParams.get("cursor")
+      // Same rule as the real 2.x server: a cursor already carries its
+      // direction, so `order` must not be sent with it.
+      if (cursor && url.searchParams.get("order")) {
+        return json(res, 400, { _tag: "InvalidCursorError", message: "Cursor cannot be combined with order" })
+      }
       const order = url.searchParams.get("order") === "asc" ? "asc" : "desc"
-      const limit = Number(url.searchParams.get("limit") ?? String(session.messages.length || 1))
-      const ordered = order === "asc" ? [...session.messages] : [...session.messages]
-      const page = ordered.slice(0, Number.isFinite(limit) && limit > 0 ? limit : ordered.length)
-      const hasMore = page.length < ordered.length
+      // The real server answers an unlimited read with a bounded page, so the
+      // mock does too — otherwise "read the whole transcript" never pages and
+      // the cursor path goes untested.
+      const limit = Number(url.searchParams.get("limit") ?? String(MESSAGE_PAGE_SIZE))
+      // The mock stores entries newest-first (like a 2.x session's own history),
+      // so the chronological view is its reverse. Paging is counted from the
+      // newest end of that view, which is what a 2.x cursor means.
+      const ascending = [...session.messages].reverse()
+      const taken = cursor ? Number(cursor.replace("cursor-", "").split("-")[0]) : 0
+      const size = Number.isFinite(limit) && limit > 0 ? limit : ascending.length
+      const from = Math.max(0, ascending.length - taken - size)
+      const to = ascending.length - taken
+      const page = order === "asc" ? ascending.slice(from, to) : ascending.slice(from, to).reverse()
+      const hasMore = from > 0
       return json(res, 200, {
         data: page,
         cursor: {
-          previous: hasMore ? `cursor-${page.length}-previous` : null,
+          previous: hasMore ? `cursor-${ascending.length - from}-previous` : null,
           next: null,
         },
       })
@@ -593,11 +612,42 @@ export function installV2Api(server: import("node:http").Server, options: V2Mock
     return html(res, 200)
   })
 
+  /**
+   * Prepend `pairs` older user/assistant exchanges to a session's transcript so
+   * a full read needs several cursor pages. Returns the oldest user message id.
+   */
+  function seedHistory(sessionID: string, pairs: number): string | undefined {
+    const session = sessions.get(sessionID)
+    if (!session) return undefined
+    const block: V2MessageEntry[] = []
+    let firstUserID: string | undefined
+    for (let i = 0; i < pairs; i++) {
+      const userID = nextID("msg")
+      const assistantID = nextID("msg")
+      if (i === 0) firstUserID = userID
+      block.push(
+        { id: userID, type: "user", text: `older question ${i}`, time: { created: Date.now() - (pairs - i) * 1000 } },
+        {
+          id: assistantID,
+          type: "assistant",
+          finish: "stop",
+          content: [{ type: "text", text: `older answer ${i}` }],
+          time: { created: Date.now() - (pairs - i) * 1000, completed: Date.now() - (pairs - i) * 900 },
+        } as unknown as V2MessageEntry,
+      )
+    }
+    // Storage is newest-first, and this block is older than everything already
+    // there, so it goes on the tail in newest-first order.
+    session.messages.push(...block.reverse())
+    return firstUserID
+  }
+
   return {
     /** SSE listeners currently attached — lets a test wait until the stream is live. */
     connected: () => sse.size,
     askPermission,
     askForm,
+    seedHistory,
     pendingPermissions: () => Array.from(permissions.keys()),
     pendingForms: () => Array.from(forms.keys()),
     sessionDirectory: () => V2_DIRECTORY,
