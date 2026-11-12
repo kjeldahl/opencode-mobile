@@ -108,6 +108,14 @@ export default function AddConnectionScreen() {
           t("connection.shared.alerts.saveFailedMessage"),
         )
       }
+    } else if (result.wakeSeconds !== undefined) {
+      // Still waking is not a failure and not worth a diagnostic report — the
+      // report would only contradict itself a second later.
+      setIsConnecting(false)
+      Alert.alert(
+        t("sessionsList.empty.workspaceWakingTitle"),
+        t("sessionsList.empty.workspaceWakingCountdown", { seconds: Math.ceil(result.wakeSeconds) }),
+      )
     } else {
       // Failed: run active diagnostics, capture to Sentry, offer a shareable report.
       const report = await probeConnection(serverUrl, buildAuth(undefined, password))
